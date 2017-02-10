@@ -1,9 +1,9 @@
 # load libraries
-for( package in c('shiny', 'ggplot2', 'rnaseqVis' ) ){
+for( package in c('shiny', 'ggplot2', 'DESeq2', 'rnaseqVis' ) ){
   require( package, character.only = TRUE )
 }
 
-testing <- TRUE
+testing <- FALSE
 
 maxScale <- function( counts ){
   geneMaxCounts <- apply(counts, 1, max)
