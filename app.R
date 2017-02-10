@@ -11,56 +11,6 @@ maxScale <- function( counts ){
   return( t( scale( t(counts), scale = geneMaxCounts, center = FALSE ) ) )
 }
 
-#' hierarchical clustering with optimal ordering
-#'
-#' cluster hierarchically clusters the supplied matrix by column and
-#' orders the leaves optimally
-#' 
-#' @param counts Matrix of counts to cluster
-#' 
-#' @return matrix with columns reordered based on clustering
-
-cluster <- function( counts ){
-  # centre and scale numbers
-  scaledCounts <- scale(counts)
-  distanceMatrix <- as.dist( (1 - cor(scaledCounts))/2 )
-  # cluster and reorder correlation matrix
-  hClust <- hclust(distanceMatrix)
-  ## find optimal ordering of leaves
-  #optOrder <- order.optimal(distanceMatrix, hClust$merge)
-  ## reorder count martix and return
-  #newClust <- hClust
-  #newClust$merge <- optOrder$merge
-  #newClust$order <- optOrder$order
-  # newOrder <- seriate(distanceMatrix, method='OLO')
-  
-  # return( counts[ , get_order(newOrder) ] )
-  return( counts[ , hClust$order] )
-}
-
-#' hierarchical cluster matrix by rows or columns (or both)
-#'
-#' clusterMatrix hierarchically clusters the supplied matrix by row or column
-#' or both and orders the leaves optimally
-#' 
-#' @param counts Matrix of counts to cluster
-#' @param byRow logical - whether to cluster the rows of the matrix
-#' @param byCol logical - whether to cluster the columns of the matrix
-#' 
-#' @return reordered matrix based on clustering
-
-clusterMatrix <- function( counts, byRow = TRUE, byCol = FALSE ){
-  # cluster columns
-  if( byCol ){
-    counts <- cluster( counts )
-  }
-  # cluster rows
-  if( byRow ){
-    counts <- t( cluster( t(counts) ) )
-  }
-  return( counts )
-}
-
 # loadData <- function(){
 #   
 # }
@@ -113,6 +63,8 @@ ui <- fluidPage(
 
 # server side stuff
 server <- function(input, output) {
+  # increase max upload size to 30 MB
+  options(shiny.maxRequestSize=30*1024^2)
   # ranges object for zooming plot
   ranges <- reactiveValues(x = NULL, y = NULL)
   
