@@ -1,9 +1,10 @@
 # load libraries
-for( package in c('shiny', 'ggplot2', 'DESeq2', 'rnaseqVis' ) ){
+for( package in c('shiny', 'ggplot2', 'DESeq2', 'rnaseqVis', 'rprojroot', 'DT' ) ){
   require( package, character.only = TRUE )
 }
 
-testing <- FALSE
+testing <- TRUE
+rootPath <- find_root(is_rstudio_project)
 
 maxScale <- function( counts ){
   geneMaxCounts <- apply(counts, 1, max)
@@ -39,7 +40,10 @@ ui <- fluidPage(
                                       min=100, max=10000, value=1000),
                           hr(),
                           h4('Download Count File'),
-                          downloadButton('downloadData', 'Download tsv'),
+                          downloadButton('downloadData', 'Download counts (tsv)'),
+                          hr(),
+                          h4('Download Gene List'),
+                          downloadButton('downloadGenes', 'Download genes (tsv)'),
                           width = 3
                         ),
                         mainPanel(
@@ -70,7 +74,7 @@ server <- function(input, output) {
   
   DeSeqCounts <- reactive({
     if( testing ){
-      testDataFile <- '/Users/rw4/sanger/lustre/scratch117/maz/team31/infection/zmp_ph263/DESeq.Dr.rnaseq.grcz10.RData'
+      testDataFile <- file.path(rootPath, 'data', 'DESeq.shield.testdata.RData')
       load(testDataFile)
       return( DESeqData )
     } else{
@@ -139,7 +143,12 @@ server <- function(input, output) {
       ranges$x <- c(1,ncol(revCounts))
     }
     if( is.null(ranges$y) ){
-      ranges$x <- c(1,nrow(revCounts))
+      ranges$y <- c(1,nrow(revCounts))
+    }
+    # output for testing
+    if( testing ){
+      print( ranges$x )
+      print( ranges$y )
     }
     count <- revCounts[ seq(ranges$y[1]+0.5, ranges$y[2]-0.5 ), 
                         seq(ranges$x[1]+0.5, ranges$x[2]-0.5 ) ]
@@ -189,11 +198,17 @@ server <- function(input, output) {
     },
     contentType = 'text/tsv'
   )
+  output$downloadGenes <- downloadHandler(
+    filename = function(){ paste('geneExpr', Sys.Date(), 'genes', 'tsv', sep='.') },
+    content = function(file) {
+      write.table(rownames(dataForTable()), file, quote=FALSE, 
+                  row.names = FALSE, col.names = FALSE, sep="\t")
+    },
+    contentType = 'text/tsv'
+  )
   
   output$table <- DT::renderDataTable({
     data <- dataForTable()
-    print( class(data) )
-    print( dim(data) )
     DT::datatable(data)
   })
 }
