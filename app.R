@@ -1,9 +1,9 @@
 # load libraries
 for( package in c('shiny', 'ggplot2', 'DESeq2', 'rnaseqVis', 'rprojroot', 'DT' ) ){
-  require( package, character.only = TRUE )
+  library( package, character.only = TRUE )
 }
 
-testing <- TRUE
+testing <- FALSE
 rootPath <- find_root(is_rstudio_project)
 
 maxScale <- function( counts ){
