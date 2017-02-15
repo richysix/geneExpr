@@ -139,6 +139,10 @@ server <- function(input, output) {
   dataForTable <- reactive({
     # reverse order of rows
     revCounts <- transformedCounts()[ rev( rownames(transformedCounts()) ), ]
+    # check inputs
+    if( is.null(revCounts) ){
+      return(NULL)
+    }
     if( is.null(ranges$x) ){
       ranges$x <- c(1,ncol(revCounts))
     }
@@ -209,6 +213,9 @@ server <- function(input, output) {
   
   output$table <- DT::renderDataTable({
     data <- dataForTable()
+    if( is.null(data) ){
+      return(NULL)
+    }
     DT::datatable(data)
   })
 }
