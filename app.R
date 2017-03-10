@@ -164,10 +164,10 @@ server <- function(input, output) {
     if( is.null(counts) ){
       return(NULL)
     } else {
-      return( ggplotExprHeatmap(counts) + 
-              coord_cartesian(xlim = ranges$x, ylim = ranges$y, expand=FALSE) +
-              theme( axis.text.x = element_text(colour="black", angle = 90, hjust = 1) )
-          )
+      plot <- ggplotExprHeatmap(counts) + 
+                coord_cartesian(xlim = ranges$x, ylim = ranges$y, expand=FALSE) +
+                theme( axis.text.x = element_text(colour="black", angle = 90, hjust = 1, debug = FALSE) )
+      return( plot )
     }
   })
   
