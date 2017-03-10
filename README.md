@@ -10,3 +10,4 @@ A shiny app for visualising gene expression data.
 * DT
 * [rnaseqVis](https://github.com/richysix/rnaseqVis)
 * rprojroot
+* devtools
