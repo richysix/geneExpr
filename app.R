@@ -7,19 +7,6 @@ for( package in c('shiny', 'ggplot2', 'DESeq2', 'rnaseqVis', 'rprojroot', 'DT' )
 testing <- FALSE
 rootPath <- find_root(is_rstudio_project)
 
-
-maxScale <- function( counts ){
-  geneMaxCounts <- apply(counts, 1, max)
-  # scale operates on the column so need to transpose, scale and then transpose back
-  return( t( scale( t(counts), scale = geneMaxCounts, center = FALSE ) ) )
-}
-
-clipRangeToMinMax <- function( range, minValue, maxValue ){
-  range[1] <- ifelse(range[1] < minValue, minValue, range[1] )
-  range[2] <- ifelse(range[2] > maxValue, maxValue, range[2] )
-  return(range)
-}
-
 # Define UI for application
 ui <- fluidPage(
   navbarPage("geneExpr",
@@ -119,6 +106,10 @@ server <- function(input, output) {
       if( testing ){
         print( sprintf('Num Genes Filtered: %d', nrow(counts) ) )
       }
+      # reset ranges to max extent so that plot zooms back out to full data set after filtering
+      ranges$x <- c(1,ncol(counts))
+      ranges$y <- c(1,nrow(counts))
+
       return( counts )
     }
   })
@@ -185,7 +176,9 @@ server <- function(input, output) {
         print( sprintf('Transform checkbox value: %s', input$transform ) )
       }
       if( input$transform == 2 ){
-        counts <- maxScale( counts )
+        geneMaxCounts <- apply(counts, 1, max)
+        # scale operates on the column so need to transpose, scale and then transpose back
+        counts <- t( scale( t(counts), scale = geneMaxCounts, center = FALSE ) )
       } else if( input$transform == 3 ){
         counts <- log10( counts + 1 )
       }
@@ -238,8 +231,13 @@ server <- function(input, output) {
         x = floor( c(brush$xmin, brush$xmax) - c( 0.5, -0.5 ) ) + c( 0, -1 ),
         y = floor( c(brush$ymin, brush$ymax) - c( 0.5, -0.5 ) ) + c( 0, -1 )
       )
-      plotRanges$x <- clipRangeToMinMax( plotRanges$x, 0, ncol(normalisedCounts()))
-      plotRanges$y <- clipRangeToMinMax( plotRanges$y, 0, nrow(normalisedCounts()))
+      # make sure values have not gone out of range
+      # i.e. less than 0 or greater than ncol/nrow of the data
+      plotRanges$x[1] <- ifelse(plotRanges$x[1] < 0, 0, plotRanges$x[1] )
+      plotRanges$x[2] <- ifelse(plotRanges$x[2] > ncol(normalisedCounts()), ncol(normalisedCounts()), plotRanges$x[2] )
+      plotRanges$y[1] <- ifelse(plotRanges$y[1] < 0, 0, plotRanges$y[1] )
+      plotRanges$y[2] <- ifelse(plotRanges$y[2] > nrow(normalisedCounts()), nrow(normalisedCounts()), plotRanges$y[2] )
+      
       if( testing ){
         print( sprintf('Plot Ranges X: %f %f', plotRanges$x[1], plotRanges$x[2] ) )
         print( sprintf('Plot Ranges Y: %f %f', plotRanges$y[1], plotRanges$y[2] ) )
@@ -260,14 +258,14 @@ server <- function(input, output) {
   output$downloadData <- downloadHandler(
     filename = function(){ paste('geneExpr', Sys.Date(), 'tsv', sep='.') },
     content = function(file) {
-      write.table(dataForTable(), file, quote=FALSE, col.names = NA, sep="\t")
+      write.table(clusteredCounts(), file, quote=FALSE, col.names = NA, sep="\t")
     },
     contentType = 'text/tsv'
   )
   output$downloadGenes <- downloadHandler(
     filename = function(){ paste('geneExpr', Sys.Date(), 'genes', 'tsv', sep='.') },
     content = function(file) {
-      write.table(rownames(dataForTable()), file, quote=FALSE, 
+      write.table(rownames(clusteredCounts()), file, quote=FALSE, 
                   row.names = FALSE, col.names = FALSE, sep="\t")
     },
     contentType = 'text/tsv'
