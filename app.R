@@ -2,6 +2,7 @@
 for( package in c('shiny', 'ggplot2', 'DESeq2', 'rnaseqVis', 'rprojroot', 'DT' ) ){
   library( package, character.only = TRUE )
 }
+source('functions.R')
 
 # globals
 testing <- FALSE
@@ -13,6 +14,9 @@ ui <- fluidPage(
              tabPanel("Heatmap",
                       sidebarLayout(
                         sidebarPanel(
+                          fileInput('sampleFile', 'Load Sample File'),
+                          fileInput('countFile', 'Load Count File'),
+                          hr(),
                           fileInput('dataFile', 'Load Data File'),
                           hr(),
                           radioButtons("transform", label = h4("Transform Counts"),
@@ -70,12 +74,18 @@ server <- function(input, output) {
       load(testDataFile)
       return( DESeqData )
     } else{
-      fileInfo <- input$dataFile
-      if (is.null(fileInfo)){
-        return(NULL)
-      } else{
+      dataFileInfo <- input$dataFile
+      sampleFileInfo <- input$sampleFile
+      countFileInfo <- input$countFile
+      if( !is.null(sampleFileInfo) & 
+                 !is.null(countFileInfo) ){
+        return( FilesToDESeqObj( sampleFileInfo$datapath, countFileInfo$datapath ) )
+      } else if( !is.null(dataFileInfo) ){
         load(fileInfo$datapath)
         return( DESeqData )
+      }
+      else{
+        return( NULL )
       }
     }
   })
