@@ -56,7 +56,8 @@ ui <- fluidPage(
              ),
              tabPanel("Counts",
                       DT::dataTableOutput("table")
-             )
+             ),
+             tabPanel("Help",includeMarkdown("README.md"))             
   )
 )
 
