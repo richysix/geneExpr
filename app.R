@@ -82,7 +82,7 @@ server <- function(input, output) {
                  !is.null(countFileInfo) ){
         return( FilesToDESeqObj( sampleFileInfo$datapath, countFileInfo$datapath ) )
       } else if( !is.null(dataFileInfo) ){
-        load(fileInfo$datapath)
+        load(dataFileInfo$datapath)
         return( DESeqData )
       }
       else{
