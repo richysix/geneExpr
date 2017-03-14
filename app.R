@@ -3,8 +3,10 @@ for( package in c('shiny', 'ggplot2', 'DESeq2', 'rnaseqVis', 'rprojroot', 'DT' )
   library( package, character.only = TRUE )
 }
 
+# globals
 testing <- FALSE
 rootPath <- find_root(is_rstudio_project)
+
 
 maxScale <- function( counts ){
   geneMaxCounts <- apply(counts, 1, max)
@@ -12,9 +14,11 @@ maxScale <- function( counts ){
   return( t( scale( t(counts), scale = geneMaxCounts, center = FALSE ) ) )
 }
 
-# loadData <- function(){
-#   
-# }
+clipRangeToMinMax <- function( range, minValue, maxValue ){
+  range[1] <- ifelse(range[1] < minValue, minValue, range[1] )
+  range[2] <- ifelse(range[2] > maxValue, maxValue, range[2] )
+  return(range)
+}
 
 # Define UI for application
 ui <- fluidPage(
@@ -70,8 +74,9 @@ server <- function(input, output) {
   # increase max upload size to 30 MB
   options(shiny.maxRequestSize=30*1024^2)
   # ranges object for zooming plot
-  ranges <- reactiveValues(x = NULL, y = NULL)
-  
+  ranges <- reactiveValues(x = NULL, 
+                           y = NULL )
+
   DeSeqCounts <- reactive({
     if( testing ){
       testDataFile <- file.path(rootPath, 'data', 'DESeq.shield.testdata.RData')
@@ -90,6 +95,9 @@ server <- function(input, output) {
     
   normalisedCounts <- reactive({
     counts <- DeSeqCounts()
+    if( testing ){
+      print( sprintf('Num Genes: %d', nrow(counts) ) )
+    }
     if( is.null(counts) ){
       return(NULL)
     } else {
@@ -103,30 +111,79 @@ server <- function(input, output) {
       return(NULL)
     } else {
       meanCount <- apply( counts, 1, mean )
+      if( testing ){
+        print( sprintf('Max mean value: %f', max(meanCount)) )
+      }
       counts <- counts[ meanCount >= input$minMeanCount &
                           meanCount <= input$maxMeanCount, ]
-      if( any( input$clusterCheckGroup == "1" ) ){
-        if( any( input$clusterCheckGroup == "2" ) ){
-          counts <- clusterMatrix(counts, byRow = TRUE, byCol = TRUE )
-        } else{
-          counts <- clusterMatrix(counts, byRow = TRUE, byCol = FALSE )
-        }
-      }
-      if( any( input$clusterCheckGroup == "2" ) ){
-        counts <- clusterMatrix(counts, byRow = FALSE, byCol = TRUE )
+      if( testing ){
+        print( sprintf('Num Genes Filtered: %d', nrow(counts) ) )
       }
       return( counts )
     }
   })
   
-  transformedCounts <- reactive({
-    if( testing ){
-      print( input$transform )
-    }
+  subsettedCounts <- reactive({
     counts <- filteredCounts()
     if( is.null(counts) ){
       return(NULL)
     } else {
+      if( testing ){
+        print( sprintf('Num Genes: %d', nrow(counts) ) )
+      }
+      # subset counts based on plot brush
+      # set ranges to max extent if they are null
+      if( is.null(ranges$x) ){
+        ranges$x <- c(1,ncol(counts))
+      }
+      if( is.null(ranges$y) ){
+        ranges$y <- c(1,nrow(counts))
+      }
+      # set ranges to max extent if they are larger than current ranges
+      ranges$x[2] <- ifelse( ranges$x[2] > ncol(counts), ncol(counts), ranges$x[2] )
+      ranges$y[2] <- ifelse( ranges$y[2] > nrow(counts), nrow(counts), ranges$y[2] )
+      
+      # y coordinates from the brush are reversed compared to the count matrix
+      # need to reverse the matrix, then subset, then reverse back to get correct genes
+      if( testing ){
+        print( seq(ranges$y[1], ranges$y[2] ) )
+        print( seq(ranges$x[1], ranges$x[2] ) )
+      }
+      revCounts <- counts[ rev( rownames(counts) ), ]
+      count <- revCounts[ seq(ranges$y[1], ranges$y[2] ), 
+                          seq(ranges$x[1], ranges$x[2] ) ]
+      return( count[ rev( rownames(count) ), ] )
+    }
+  })
+  
+  clusteredCounts <- reactive({
+    counts <- subsettedCounts()
+    if( is.null(counts) ){
+      return(NULL)
+    }
+    if( testing ){
+      print( sprintf('Cluster checkbox value: %s', input$clusterCheckGroup ) )
+    }
+    if( any( input$clusterCheckGroup == "1" ) ){
+      if( any( input$clusterCheckGroup == "2" ) ){
+        counts <- clusterMatrix(counts, byRow = TRUE, byCol = TRUE )
+      } else{
+        counts <- clusterMatrix(counts, byRow = TRUE, byCol = FALSE )
+      }
+    } else if( any( input$clusterCheckGroup == "2" ) ){
+      counts <- clusterMatrix(counts, byRow = FALSE, byCol = TRUE )
+    }
+    return(counts)
+  })
+  
+  transformedCounts <- reactive({
+    counts <- clusteredCounts()
+    if( is.null(counts) ){
+      return(NULL)
+    } else {
+      if( testing ){
+        print( sprintf('Transform checkbox value: %s', input$transform ) )
+      }
       if( input$transform == 2 ){
         counts <- maxScale( counts )
       } else if( input$transform == 3 ){
@@ -136,37 +193,35 @@ server <- function(input, output) {
     }
   })
   
-  dataForTable <- reactive({
-    # reverse order of rows
-    revCounts <- transformedCounts()[ rev( rownames(transformedCounts()) ), ]
-    # check inputs
-    if( is.null(revCounts) ){
-      return(NULL)
-    }
-    if( is.null(ranges$x) ){
-      ranges$x <- c(1,ncol(revCounts))
-    }
-    if( is.null(ranges$y) ){
-      ranges$y <- c(1,nrow(revCounts))
-    }
-    # output for testing
-    if( testing ){
-      print( ranges$x )
-      print( ranges$y )
-    }
-    count <- revCounts[ seq(ranges$y[1]+0.5, ranges$y[2]-0.5 ), 
-                        seq(ranges$x[1]+0.5, ranges$x[2]-0.5 ) ]
-    return( count[ rev( rownames(count) ), ] )
+  geneNames <- reactive({
+    DESeqData <- DeSeqCounts()
+    genes <- as.character(rowData(DESeqData)$Gene.name)
+    names(genes) <- as.character(rowData(DESeqData)$Gene.ID)
+    return(genes)
   })
-
+  
   output$exprHeatmap <- renderPlot({
     counts <- transformedCounts()
     if( is.null(counts) ){
       return(NULL)
     } else {
-      plot <- ggplotExprHeatmap(counts) + 
-                coord_cartesian(xlim = ranges$x, ylim = ranges$y, expand=FALSE) +
-                theme( axis.text.x = element_text(colour="black", angle = 90, hjust = 1, debug = FALSE) )
+      plot <- ggplotExprHeatmap(counts)
+      if( nrow(counts) <= 80 ){
+        genes <- geneNames()[ rownames(counts) ]
+        if( ncol(counts) <= 96 ){
+          plot <- plot + 
+            scale_y_discrete( labels = genes ) + 
+            theme( axis.text.x = element_text(colour="black", angle = 90, hjust = 1, debug = FALSE),
+                   axis.text.y = element_text(colour="black", angle = 0, debug = FALSE ) )
+        } else{
+          plot <- plot + 
+            scale_y_discrete( labels = genes ) + 
+            theme( axis.text.y = element_text(colour="black", angle = 0, debug = FALSE ) )
+        }
+      } else if( ncol(counts) <= 96 ){
+        plot <- plot + 
+          theme( axis.text.x = element_text(colour="black", angle = 90, hjust = 1, debug = FALSE) )
+      }
       return( plot )
     }
   })
@@ -176,23 +231,30 @@ server <- function(input, output) {
   observeEvent(input$heatmap_dblclick, {
     brush <- input$heatmap_brush
     if( testing ){
-      print( brush )
+      print( sprintf('Brush: Xmin: %s Xmax: %s Ymin: %s Ymax: %s', brush$xmin, brush$xmax, brush$ymin, brush$ymax ) )
     }
     if (!is.null(brush)) {
-      ranges$x <- floor( c(brush$xmin, brush$xmax) - c( 0.5, -0.5 ) ) + c( 0.5, 0.5 )
-      ranges$y <- floor( c(brush$ymin, brush$ymax) - c( 0.5, -0.5 ) ) + c( 0.5, 0.5 )
-      ranges$x[2] <- ifelse(ranges$x[2] > ncol(normalisedCounts()), 
-                            ncol(normalisedCounts()) + 0.5, ranges$x[2] )
-      ranges$y[2] <- ifelse(ranges$y[2] > nrow(normalisedCounts()), 
-                            nrow(normalisedCounts()) + 0.5, ranges$y[2] )
+      plotRanges <- list(
+        x = floor( c(brush$xmin, brush$xmax) - c( 0.5, -0.5 ) ) + c( 0, -1 ),
+        y = floor( c(brush$ymin, brush$ymax) - c( 0.5, -0.5 ) ) + c( 0, -1 )
+      )
+      plotRanges$x <- clipRangeToMinMax( plotRanges$x, 0, ncol(normalisedCounts()))
+      plotRanges$y <- clipRangeToMinMax( plotRanges$y, 0, nrow(normalisedCounts()))
+      if( testing ){
+        print( sprintf('Plot Ranges X: %f %f', plotRanges$x[1], plotRanges$x[2] ) )
+        print( sprintf('Plot Ranges Y: %f %f', plotRanges$y[1], plotRanges$y[2] ) )
+      }
+      
+      ranges$x <- c(ranges$x[1], ranges$x[1]) + plotRanges$x
+      ranges$y <- c(ranges$y[1], ranges$y[1]) + plotRanges$y
+      if( testing ){
+        print( sprintf('Ranges X: %f %f', ranges$x[1], ranges$x[2] ) )
+        print( sprintf('Ranges Y: %f %f', ranges$y[1], ranges$y[2] ) )
+      }
+      
     } else {
       ranges$x <- NULL
       ranges$y <- NULL
-    }
-    # output for testing
-    if( testing ){
-      print( ranges$x )
-      print( ranges$y )
     }
   })
   output$downloadData <- downloadHandler(
@@ -212,7 +274,7 @@ server <- function(input, output) {
   )
   
   output$table <- DT::renderDataTable({
-    data <- dataForTable()
+    data <- clusteredCounts()
     if( is.null(data) ){
       return(NULL)
     }
