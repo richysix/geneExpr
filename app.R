@@ -148,13 +148,40 @@ server <- function(input, output) {
       # y coordinates from the brush are reversed compared to the count matrix
       # need to reverse the matrix, then subset, then reverse back to get correct genes
       if( testing ){
+        print( sprintf('Ranges X: %f %f', ranges$x[1], ranges$x[2] ) )
+        print( sprintf('Ranges Y: %f %f', ranges$y[1], ranges$y[2] ) )
         print( seq(ranges$y[1], ranges$y[2] ) )
         print( seq(ranges$x[1], ranges$x[2] ) )
       }
       revCounts <- counts[ rev( rownames(counts) ), ]
-      count <- revCounts[ seq(ranges$y[1], ranges$y[2] ), 
-                          seq(ranges$x[1], ranges$x[2] ) ]
-      return( count[ rev( rownames(count) ), ] )
+      numRow <- length(seq(ranges$y[1], ranges$y[2] ))
+      numCol <- length( seq(ranges$x[1], ranges$x[2] ))
+      # If there is only one row or col the matrix gets simplified into a vector.
+      # Needs to force it to stay as a matrix
+      if( numRow == 1 & numCol == 1 ){
+        count <- matrix( revCounts[ ranges$y[1], ranges$x[1] ],
+                         dimnames = list( rownames(revCounts)[ ranges$y[1] ],
+                                          colnames(revCounts)[ ranges$x[1] ] )
+                        )
+      } else if( numRow == 1 ){
+        count <- matrix( revCounts[ ranges$y[1], seq(ranges$x[1], ranges$x[2] ) ],
+                         nrow = 1,
+                         dimnames = list( rownames(revCounts)[ ranges$y[1] ],
+                                          colnames(revCounts)[ seq(ranges$x[1], ranges$x[2] ) ] )
+                      )
+      } else if( numCol == 1 ){
+        # row range (ranges$y) is reversed so that we get a matrix in the same order as the plot
+        count <- matrix( revCounts[ seq(ranges$y[2], ranges$y[1] ), ranges$x[1] ],
+                         ncol = 1,
+                         dimnames = list( rownames(revCounts)[ seq(ranges$y[2], ranges$y[1] ) ],
+                                          colnames(revCounts)[ ranges$x[1] ] )
+                        )
+      } else{
+        # row range (ranges$y) is reversed so that we get a matrix in the same order as the plot
+        count <- revCounts[ seq(ranges$y[2], ranges$y[1] ), 
+                            seq(ranges$x[1], ranges$x[2] ) ]
+      }
+      return( count )
     }
   })
   
