@@ -30,7 +30,7 @@ ui <- fluidPage(
                           hr(),
                           h4('Filter Genes'),
                           sliderInput("minMeanCount", "Mean Count Minimum Threshold:",
-                                      min=0, max=1000, value=10),
+                                      min=0, max=1000, value=5),
                           sliderInput("maxMeanCount", "Mean Count Maximum Threshold:",
                                       min=100, max=10000, value=1000),
                           hr(),
@@ -131,7 +131,7 @@ server <- function(input, output) {
       return(NULL)
     } else {
       if( testing ){
-        print( sprintf('Num Genes: %d', nrow(counts) ) )
+        print( sprintf('Num Genes After Filtering: %d', nrow(counts) ) )
       }
       # subset counts based on plot brush
       # set ranges to max extent if they are null
