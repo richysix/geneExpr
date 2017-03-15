@@ -20,7 +20,7 @@ FilesToDESeqObj <- function( sampleFile, countFile ){
   # read in sample info
   sampleInfo <- read.table(sampleFile, sep="\t", header=TRUE, row.names = 1)
   # Read in count data
-  data <- read.delim(dataFile, header=TRUE, check.names=FALSE)
+  data <- read.delim(countFile, header=TRUE, check.names=FALSE)
   
   # Support different column names
   names(data)[names(data) == 'chr']     <- 'Chr'
