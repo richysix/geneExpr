@@ -34,10 +34,14 @@ ui <- fluidPage(
                           sliderInput("maxMeanCount", "Mean Count Maximum Threshold:",
                                       min=100, max=10000, value=1000),
                           hr(),
-                          h4('Download Count File'),
+                          h4('Downloads'),
+                          radioButtons("plotFormat", label = h5("Plot File"),
+                                       choices = list("pdf" = 'pdf', "png" = 'png'), 
+                                       selected = 'pdf'),
+                          downloadButton('downloadPlot', 'Download plot'),
+                          h5('Count File'),
                           downloadButton('downloadData', 'Download counts (tsv)'),
-                          hr(),
-                          h4('Download Gene List'),
+                          h5('Gene List'),
                           downloadButton('downloadGenes', 'Download genes (tsv)'),
                           width = 3
                         ),
@@ -91,6 +95,13 @@ server <- function(input, output) {
     }
   })
     
+  geneNames <- reactive({
+    DESeqData <- DeSeqCounts()
+    genes <- as.character(rowData(DESeqData)$Gene.name)
+    names(genes) <- as.character(rowData(DESeqData)$Gene.ID)
+    return(genes)
+  })
+  
   normalisedCounts <- reactive({
     counts <- DeSeqCounts()
     if( testing ){
@@ -224,14 +235,7 @@ server <- function(input, output) {
     }
   })
   
-  geneNames <- reactive({
-    DESeqData <- DeSeqCounts()
-    genes <- as.character(rowData(DESeqData)$Gene.name)
-    names(genes) <- as.character(rowData(DESeqData)$Gene.ID)
-    return(genes)
-  })
-  
-  output$exprHeatmap <- renderPlot({
+  heatmapObj <- reactive({
     counts <- transformedCounts()
     if( is.null(counts) ){
       return(NULL)
@@ -239,22 +243,26 @@ server <- function(input, output) {
       plot <- ggplotExprHeatmap(counts)
       if( nrow(counts) <= 80 ){
         genes <- geneNames()[ rownames(counts) ]
-        if( ncol(counts) <= 96 ){
+        if( ncol(counts) <= 48 ){
           plot <- plot + 
             scale_y_discrete( labels = genes ) + 
-            theme( axis.text.x = element_text(colour="black", angle = 90, hjust = 1, debug = FALSE),
+            theme( axis.text.x = element_text(colour="black", angle = 90, vjust = 0.5, hjust = 1, debug = FALSE),
                    axis.text.y = element_text(colour="black", angle = 0, debug = FALSE ) )
         } else{
           plot <- plot + 
             scale_y_discrete( labels = genes ) + 
             theme( axis.text.y = element_text(colour="black", angle = 0, debug = FALSE ) )
         }
-      } else if( ncol(counts) <= 96 ){
+      } else if( ncol(counts) <= 48 ){
         plot <- plot + 
-          theme( axis.text.x = element_text(colour="black", angle = 90, hjust = 1, debug = FALSE) )
+          theme( axis.text.x = element_text(colour="black", angle = 90, vjust = 0.5, hjust = 1, debug = FALSE) )
       }
       return( plot )
     }
+  })
+  
+  output$exprHeatmap <- renderPlot({
+    return( heatmapObj() )
   })
   
   # When a double-click happens, check if there's a brush on the plot.
@@ -293,6 +301,23 @@ server <- function(input, output) {
       ranges$y <- NULL
     }
   })
+  
+  output$downloadPlot <- downloadHandler(
+    filename = function(){ paste('geneExpr', Sys.Date(), input$plotFormat, sep='.') },
+    content = function(file) {
+      heatmapPlot <- heatmapObj()
+        # theme( axis.text = element_text( size = rel(0.5) ) )
+      plotHeight <- floor( nrow(transformedCounts()) * 1.1 )
+      if(input$plotFormat == "pdf"){
+        pdf(file, paper="special", height = 16.5, width = 11.7 ) # open the pdf device
+      } else if(input$plotFormat == "png"){
+        png(file, height = 960, width = 480, res = 100 ) # open the png device
+      }
+      print( heatmapPlot )
+      dev.off()  # close device 
+    }
+  )
+  
   output$downloadData <- downloadHandler(
     filename = function(){ paste('geneExpr', Sys.Date(), 'tsv', sep='.') },
     content = function(file) {
