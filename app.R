@@ -30,9 +30,10 @@ ui <- fluidPage(
                           hr(),
                           h4('Filter Genes'),
                           sliderInput("minMeanCount", "Mean Count Minimum Threshold:",
-                                      min=0, max=1000, value=5),
+                                      min=0, max=1000, value=0),
                           sliderInput("maxMeanCount", "Mean Count Maximum Threshold:",
-                                      min=100, max=10000, value=1000),
+                                      min=100, max=100000, value=100000),
+                          fileInput('geneIdsFile', 'Subset by Gene Id'),
                           hr(),
                           h4('Downloads'),
                           radioButtons("plotFormat", label = h5("Plot File"),
@@ -46,6 +47,7 @@ ui <- fluidPage(
                           width = 3
                         ),
                         mainPanel(
+                          textOutput('warningsText'),
                           plotOutput("exprHeatmap",
                                      dblclick = "heatmap_dblclick",
                                      brush = brushOpts(
@@ -71,35 +73,77 @@ server <- function(input, output) {
   options(shiny.maxRequestSize=30*1024^2)
   # ranges object for zooming plot
   ranges <- reactiveValues(x = NULL, 
-                           y = NULL )
-
+                           y = NULL)
+  ids2Names <- reactiveValues() # this will contain genes and samples, both named character vectors
+  selected <- reactiveValues() # this will contain genes and samples, both named character vectors
+  warnings <- reactiveValues() # this will contain warning messages to display
+  missingGenes <- reactiveValues() # this will contain genes, a character vector
+  
   DeSeqCounts <- reactive({
     if( testing ){
       testDataFile <- file.path(rootPath, 'data', 'DESeq.shield.testdata.RData')
       load(testDataFile)
-      return( DESeqData )
     } else{
       dataFileInfo <- input$dataFile
       sampleFileInfo <- input$sampleFile
       countFileInfo <- input$countFile
       if( !is.null(sampleFileInfo) & 
                  !is.null(countFileInfo) ){
-        return( FilesToDESeqObj( sampleFileInfo$datapath, countFileInfo$datapath ) )
+        DESeqData <- FilesToDESeqObj( sampleFileInfo$datapath, countFileInfo$datapath )
       } else if( !is.null(dataFileInfo) ){
         load(dataFileInfo$datapath)
-        return( DESeqData )
       }
       else{
         return( NULL )
       }
     }
-  })
-    
-  geneNames <- reactive({
-    DESeqData <- DeSeqCounts()
     genes <- as.character(rowData(DESeqData)$Gene.name)
     names(genes) <- as.character(rowData(DESeqData)$Gene.ID)
-    return(genes)
+    samples <- rownames(colData(DESeqData))
+    names(samples) <- rownames(colData(DESeqData))
+    if( testing ){
+      print(head(genes))
+      print(head(samples))
+    }
+    selected$genes <- genes
+    selected$samples <- samples
+    ids2Names$genes <- genes
+    ids2Names$samples <- samples
+    return( DESeqData )
+  })
+  
+  subsetGeneList <- observe({
+    geneIdsFileInfo <- input$geneIdsFile
+    if( !is.null(geneIdsFileInfo) ){
+      geneInfo <- read.table(geneIdsFileInfo$datapath)
+      geneIds <- as.character(geneInfo[[1]])
+      if(testing){ print( head(geneIds) ) }
+      # check for any ids that don't exist
+      nonexistentIds <- vector( 'list', length = length(geneIds) )
+      Ids <- vector( 'list', length = length(geneIds) )
+      for( i in seq_len( length(geneIds) ) ){
+        if( sum( names(ids2Names$genes) == geneIds[i] ) == 0 ){
+          nonexistentIds[[i]] <- geneIds[i]
+          Ids[[i]] <- NULL
+        } else{
+          nonexistentIds[i] <- NULL
+          Ids[[i]] <- geneIds[i]
+        }
+      }
+      nonexistentIds <- do.call(c, nonexistentIds)
+      Ids <- do.call(c, Ids)
+      if( testing ){ 
+        print( sprintf('Missing Ids: %s', paste(nonexistentIds, collapse=" ") ) )
+        print( sprintf('Matched Ids: %s', paste(Ids, collapse = " " ) ) )
+      }
+      # and warn
+      if( length(nonexistentIds) > 0 ){
+        warnings$geneSubset <- "Some of the gene ids couldn't be matched!"
+        missingGenes$genes <- nonexistentIds
+      }
+      # set selected genes to ids
+      selected$genes <- isolate(selected$genes[ Ids ])
+    }
   })
   
   normalisedCounts <- reactive({
@@ -128,9 +172,9 @@ server <- function(input, output) {
       if( testing ){
         print( sprintf('Num Genes Filtered: %d', nrow(counts) ) )
       }
-      # reset ranges to max extent so that plot zooms back out to full data set after filtering
-      ranges$x <- c(1,ncol(counts))
-      ranges$y <- c(1,nrow(counts))
+      # reset selected genes to everything in counts
+      geneIds <- rownames(counts)
+      selected$genes <- ids2Names$genes[ geneIds ]
 
       return( counts )
     }
@@ -142,55 +186,32 @@ server <- function(input, output) {
       return(NULL)
     } else {
       if( testing ){
-        print( sprintf('Num Genes After Filtering: %d', nrow(counts) ) )
+        print( sprintf('selected Genes length = %d', length(reactiveValuesToList(selected)$genes) ) )
+        print( sprintf('selected Samples length = %d', length(reactiveValuesToList(selected)$samples) ) )
+        print( sprintf('selected Gene Ids = %s', head(names(selected$genes)) ) )
+        print( sprintf('selected Gene Names = %s', head(selected$genes) ) )
+        print( sprintf('selected Sample Ids = %s', head(names(selected$samples)) ))
       }
-      # subset counts based on plot brush
-      # set ranges to max extent if they are null
-      if( is.null(ranges$x) ){
-        ranges$x <- c(1,ncol(counts))
-      }
-      if( is.null(ranges$y) ){
-        ranges$y <- c(1,nrow(counts))
-      }
-      # set ranges to max extent if they are larger than current ranges
-      ranges$x[2] <- ifelse( ranges$x[2] > ncol(counts), ncol(counts), ranges$x[2] )
-      ranges$y[2] <- ifelse( ranges$y[2] > nrow(counts), nrow(counts), ranges$y[2] )
-      
-      # y coordinates from the brush are reversed compared to the count matrix
-      # need to reverse the matrix, then subset, then reverse back to get correct genes
-      if( testing ){
-        print( sprintf('Ranges X: %f %f', ranges$x[1], ranges$x[2] ) )
-        print( sprintf('Ranges Y: %f %f', ranges$y[1], ranges$y[2] ) )
-        print( seq(ranges$y[1], ranges$y[2] ) )
-        print( seq(ranges$x[1], ranges$x[2] ) )
-      }
-      revCounts <- counts[ rev( rownames(counts) ), ]
-      numRow <- length(seq(ranges$y[1], ranges$y[2] ))
-      numCol <- length( seq(ranges$x[1], ranges$x[2] ))
+      numRow <- length(selected$genes)
+      numCol <- length(selected$samples)
       # If there is only one row or col the matrix gets simplified into a vector.
       # Needs to force it to stay as a matrix
       if( numRow == 1 & numCol == 1 ){
-        count <- matrix( revCounts[ ranges$y[1], ranges$x[1] ],
-                         dimnames = list( rownames(revCounts)[ ranges$y[1] ],
-                                          colnames(revCounts)[ ranges$x[1] ] )
+        count <- matrix( counts[ names(selected$genes), names(selected$samples) ],
+                         dimnames = list( names(selected$genes), names(selected$samples) )
                         )
       } else if( numRow == 1 ){
-        count <- matrix( revCounts[ ranges$y[1], seq(ranges$x[1], ranges$x[2] ) ],
+        count <- matrix( counts[ names(selected$genes), names(selected$samples) ],
                          nrow = 1,
-                         dimnames = list( rownames(revCounts)[ ranges$y[1] ],
-                                          colnames(revCounts)[ seq(ranges$x[1], ranges$x[2] ) ] )
+                         dimnames = list( names(selected$genes), names(selected$samples) )
                       )
       } else if( numCol == 1 ){
-        # row range (ranges$y) is reversed so that we get a matrix in the same order as the plot
-        count <- matrix( revCounts[ seq(ranges$y[2], ranges$y[1] ), ranges$x[1] ],
+        count <- matrix( counts[ names(selected$genes), names(selected$samples) ],
                          ncol = 1,
-                         dimnames = list( rownames(revCounts)[ seq(ranges$y[2], ranges$y[1] ) ],
-                                          colnames(revCounts)[ ranges$x[1] ] )
+                         dimnames = list( names(selected$genes), names(selected$samples) )
                         )
       } else{
-        # row range (ranges$y) is reversed so that we get a matrix in the same order as the plot
-        count <- revCounts[ seq(ranges$y[2], ranges$y[1] ), 
-                            seq(ranges$x[1], ranges$x[2] ) ]
+        count <- counts[ names(selected$genes), names(selected$samples) ]
       }
       return( count )
     }
@@ -201,7 +222,7 @@ server <- function(input, output) {
     if( is.null(counts) ){
       return(NULL)
     }
-    if( testing ){
+    if( testing & length(input$clusterCheckGroup) > 0 ){
       print( sprintf('Cluster checkbox value: %s', input$clusterCheckGroup ) )
     }
     if( any( input$clusterCheckGroup == "1" ) ){
@@ -242,7 +263,7 @@ server <- function(input, output) {
     } else {
       plot <- ggplotExprHeatmap(counts)
       if( nrow(counts) <= 80 ){
-        genes <- geneNames()[ rownames(counts) ]
+        genes <- ids2Names$genes[ rownames(counts) ]
         if( ncol(counts) <= 48 ){
           plot <- plot + 
             scale_y_discrete( labels = genes ) + 
@@ -261,6 +282,16 @@ server <- function(input, output) {
     }
   })
   
+  output$warningsText <- renderText({
+    if( !is.null(warnings) ){
+      if( !is.null(warnings$geneSubset) ){
+        return( paste(warnings$geneSubset, missingGenes$genes, sep="\n") )
+      }
+    } else{
+      return( NULL )
+    }
+  })
+  
   output$exprHeatmap <- renderPlot({
     return( heatmapObj() )
   })
@@ -274,31 +305,34 @@ server <- function(input, output) {
     }
     if (!is.null(brush)) {
       plotRanges <- list(
-        x = floor( c(brush$xmin, brush$xmax) - c( 0.5, -0.5 ) ) + c( 0, -1 ),
-        y = floor( c(brush$ymin, brush$ymax) - c( 0.5, -0.5 ) ) + c( 0, -1 )
+        x = floor( c(brush$xmin, brush$xmax) - c( 0.5, -0.5 ) ),
+        y = floor( c(brush$ymin, brush$ymax) - c( 0.5, -0.5 ) )
       )
       # make sure values have not gone out of range
       # i.e. less than 0 or greater than ncol/nrow of the data
-      plotRanges$x[1] <- ifelse(plotRanges$x[1] < 0, 0, plotRanges$x[1] )
+      plotRanges$x[1] <- ifelse(plotRanges$x[1] < 1, 1, plotRanges$x[1] )
       plotRanges$x[2] <- ifelse(plotRanges$x[2] > ncol(normalisedCounts()), ncol(normalisedCounts()), plotRanges$x[2] )
-      plotRanges$y[1] <- ifelse(plotRanges$y[1] < 0, 0, plotRanges$y[1] )
+      plotRanges$y[1] <- ifelse(plotRanges$y[1] < 1, 1, plotRanges$y[1] )
       plotRanges$y[2] <- ifelse(plotRanges$y[2] > nrow(normalisedCounts()), nrow(normalisedCounts()), plotRanges$y[2] )
       
       if( testing ){
         print( sprintf('Plot Ranges X: %f %f', plotRanges$x[1], plotRanges$x[2] ) )
         print( sprintf('Plot Ranges Y: %f %f', plotRanges$y[1], plotRanges$y[2] ) )
       }
-      
-      ranges$x <- c(ranges$x[1], ranges$x[1]) + plotRanges$x
-      ranges$y <- c(ranges$y[1], ranges$y[1]) + plotRanges$y
+      selection <- reactiveValuesToList(selected)
+      selectedGeneIds <- rev( rev( names(selection$genes) )[ seq(plotRanges$y[1], plotRanges$y[2]) ] )
+      selectedSampleIds <- names(selection$samples)[ seq(plotRanges$x[1], plotRanges$x[2]) ]
       if( testing ){
-        print( sprintf('Ranges X: %f %f', ranges$x[1], ranges$x[2] ) )
-        print( sprintf('Ranges Y: %f %f', ranges$y[1], ranges$y[2] ) )
+        print( sprintf('Num Genes = %d, Num Samples = %d', 
+                       length(selectedGeneIds),
+                       length(selectedSampleIds) ) )        
       }
-      
+
+      selected$genes <- selection$genes[ selectedGeneIds ]
+      selected$samples <- selection$samples[ selectedSampleIds ]
     } else {
-      ranges$x <- NULL
-      ranges$y <- NULL
+      selected$genes <- ids2Names$genes
+      selected$samples <- ids2Names$samples
     }
   })
   
