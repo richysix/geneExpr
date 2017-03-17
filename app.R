@@ -79,7 +79,6 @@ server <- function(input, output, session) {
                            y = NULL)
   ids2Names <- reactiveValues() # this will contain genes and samples, both named character vectors
   selected <- reactiveValues() # this will contain genes and samples, both named character vectors
-  warnings <- reactiveValues() # this will contain warning messages to display
 
   DeSeqCounts <- reactive({
     if( testing ){
@@ -153,7 +152,6 @@ server <- function(input, output, session) {
   observeEvent(input$subsetReset, {
     selected$genes <- ids2Names$genes
     selected$samples <- ids2Names$samples
-    warnings$geneSubset <- NULL
     reset("geneIdsFile") 
   })
   
@@ -320,18 +318,7 @@ server <- function(input, output, session) {
       return( plot )
     }
   })
-  
-  # # create text for warning message
-  # output$warningsText <- renderText({
-  #   if( !is.null(warnings) ){
-  #     if( !is.null(warnings$geneSubset) ){
-  #       return( paste(warnings$geneSubset, missingGenes$genes, sep="\n") )
-  #     }
-  #   } else{
-  #     return( NULL )
-  #   }
-  # })
-  
+
   # render heatmap plot
   output$exprHeatmap <- renderPlot({
     return( heatmapObj() )
