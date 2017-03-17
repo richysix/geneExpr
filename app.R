@@ -18,7 +18,8 @@ ui <- fluidPage(
                           fileInput('sampleFile', 'Load Sample File'),
                           fileInput('countFile', 'Load Count File'),
                           hr(),
-                          fileInput('dataFile', 'Load Data File'),
+                          fileInput('geneIdsFile', 'Subset by Gene Id'),
+                          actionButton("subsetReset", "Reset"),
                           hr(),
                           radioButtons("transform", label = h4("Transform Counts"),
                                        choices = list("Raw" = 1, "Max Scaled" = 2, "log 10" = 3), 
@@ -34,8 +35,6 @@ ui <- fluidPage(
                                       min=0, max=1000, value=0),
                           sliderInput("maxMeanCount", "Mean Count Maximum Threshold:",
                                       min=100, max=100000, value=100000),
-                          fileInput('geneIdsFile', 'Subset by Gene Id'),
-                          actionButton("subsetReset", "Reset"),
                           hr(),
                           h4('Downloads'),
                           radioButtons("plotFormat", label = h5("Plot File"),
@@ -46,6 +45,8 @@ ui <- fluidPage(
                           downloadButton('downloadData', 'Download counts (tsv)'),
                           h5('Gene List'),
                           downloadButton('downloadGenes', 'Download genes (tsv)'),
+                          hr(),
+                          fileInput('dataFile', 'Load .RData File'),
                           width = 3
                         ),
                         mainPanel(
