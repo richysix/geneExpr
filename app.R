@@ -170,6 +170,23 @@ server <- function(input, output, session) {
     }
   })
   
+  # calculate Max mean value in data
+  maxMeanValue <- reactive({
+    counts <- normalisedCounts()
+    if( is.null(counts) ){
+      return(NULL)
+    } else {
+      # calculate the max value of the row means, truncate to integer above
+      return( ceiling( max( apply( counts, 1, mean ) ) ) )
+    }
+  })
+  
+  # set slider input max value to max in data
+  observe({
+    maxMean <- maxMeanValue()
+    updateSliderInput(session, "maxMeanCount", value = maxMean, max = maxMean )
+  })
+  
   # filter counts by expression level
   filteredCounts <- reactive({
     counts <- normalisedCounts()
@@ -205,9 +222,14 @@ server <- function(input, output, session) {
         print( sprintf('selected Gene Ids = %s', head(names(selected$genes)) ) )
         print( sprintf('selected Gene Names = %s', head(selected$genes) ) )
         print( sprintf('selected Sample Ids = %s', head(names(selected$samples)) ))
+        print( dim( counts) )
       }
       numRow <- length(selected$genes)
       numCol <- length(selected$samples)
+      # If the filtered set is too small go back to all genes/samples
+      if( numRow > nrow(counts) | numCol > ncol(counts) ){
+        counts <- normalisedCounts()
+      }
       # If there is only one row or col the matrix gets simplified into a vector.
       # Needs to force it to stay as a matrix
       if( numRow == 1 & numCol == 1 ){
