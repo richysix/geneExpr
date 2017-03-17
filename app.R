@@ -1,5 +1,5 @@
 # load libraries
-for( package in c('shiny', 'ggplot2', 'DESeq2', 'rnaseqVis', 'rprojroot', 'DT' ) ){
+for( package in c('shiny', 'shinyjs', 'ggplot2', 'DESeq2', 'rnaseqVis', 'rprojroot', 'DT' ) ){
   library( package, character.only = TRUE )
 }
 source('functions.R')
@@ -10,6 +10,7 @@ rootPath <- find_root(is_rstudio_project)
 
 # Define UI for application
 ui <- fluidPage(
+  useShinyjs(), # Include shinyjs
   navbarPage("geneExpr",
              tabPanel("Heatmap",
                       sidebarLayout(
@@ -34,6 +35,7 @@ ui <- fluidPage(
                           sliderInput("maxMeanCount", "Mean Count Maximum Threshold:",
                                       min=100, max=100000, value=100000),
                           fileInput('geneIdsFile', 'Subset by Gene Id'),
+                          actionButton("subsetReset", "Reset"),
                           hr(),
                           h4('Downloads'),
                           radioButtons("plotFormat", label = h5("Plot File"),
@@ -146,6 +148,15 @@ server <- function(input, output) {
     }
   })
   
+  # respond to reset button
+  observeEvent(input$subsetReset, {
+    selected$genes <- ids2Names$genes
+    selected$samples <- ids2Names$samples
+    warnings$geneSubset <- NULL
+    reset("geneIdsFile") 
+  })
+  
+  # retrieve normalised counts
   normalisedCounts <- reactive({
     counts <- DeSeqCounts()
     if( testing ){
@@ -158,6 +169,7 @@ server <- function(input, output) {
     }
   })
   
+  # filter counts by expression level
   filteredCounts <- reactive({
     counts <- normalisedCounts()
     if( is.null(counts) ){
@@ -180,6 +192,7 @@ server <- function(input, output) {
     }
   })
   
+  # subset to genes/samples
   subsettedCounts <- reactive({
     counts <- filteredCounts()
     if( is.null(counts) ){
@@ -217,6 +230,7 @@ server <- function(input, output) {
     }
   })
   
+  # cluster counts by genes/samples
   clusteredCounts <- reactive({
     counts <- subsettedCounts()
     if( is.null(counts) ){
@@ -237,6 +251,7 @@ server <- function(input, output) {
     return(counts)
   })
   
+  # transform counts. max scaled/log10
   transformedCounts <- reactive({
     counts <- clusteredCounts()
     if( is.null(counts) ){
@@ -256,6 +271,7 @@ server <- function(input, output) {
     }
   })
   
+  # create plot object
   heatmapObj <- reactive({
     counts <- transformedCounts()
     if( is.null(counts) ){
@@ -336,12 +352,12 @@ server <- function(input, output) {
     }
   })
   
+  # for downloading the plot as a pdf/png
   output$downloadPlot <- downloadHandler(
     filename = function(){ paste('geneExpr', Sys.Date(), input$plotFormat, sep='.') },
     content = function(file) {
       heatmapPlot <- heatmapObj()
         # theme( axis.text = element_text( size = rel(0.5) ) )
-      plotHeight <- floor( nrow(transformedCounts()) * 1.1 )
       if(input$plotFormat == "pdf"){
         pdf(file, paper="special", height = 16.5, width = 11.7 ) # open the pdf device
       } else if(input$plotFormat == "png"){
@@ -352,6 +368,7 @@ server <- function(input, output) {
     }
   )
   
+  # for downloading the counts file
   output$downloadData <- downloadHandler(
     filename = function(){ paste('geneExpr', Sys.Date(), 'tsv', sep='.') },
     content = function(file) {
@@ -359,6 +376,7 @@ server <- function(input, output) {
     },
     contentType = 'text/tsv'
   )
+  # for downloading a gene list
   output$downloadGenes <- downloadHandler(
     filename = function(){ paste('geneExpr', Sys.Date(), 'genes', 'tsv', sep='.') },
     content = function(file) {
@@ -368,6 +386,7 @@ server <- function(input, output) {
     contentType = 'text/tsv'
   )
   
+  # render the counts matrix as a table
   output$table <- DT::renderDataTable({
     data <- clusteredCounts()
     if( is.null(data) ){
