@@ -15,6 +15,9 @@ ui <- fluidPage(
              tabPanel("Heatmap",
                       sidebarLayout(
                         sidebarPanel(
+                          radioButtons("dataType", label = h5("Data Type"),
+                                       choices = list("RNA-seq" = 'rnaseq', "DeTCT" = 'detct'), 
+                                       selected = 'rnaseq'),
                           fileInput('sampleFile', 'Load Sample File'),
                           fileInput('countFile', 'Load Count File'),
                           hr(),
@@ -50,7 +53,7 @@ ui <- fluidPage(
                           width = 3
                         ),
                         mainPanel(
-                          bsAlert("geneIdsWarningAlert"),
+                          bsAlert("HeatmapAlert"),
                           plotOutput("exprHeatmap",
                                      dblclick = "heatmap_dblclick",
                                      brush = brushOpts(
@@ -82,15 +85,23 @@ server <- function(input, output, session) {
 
   DeSeqCounts <- reactive({
     if( testing ){
-      testDataFile <- file.path(rootPath, 'data', 'DESeq.shield.testdata.RData')
-      load(testDataFile)
+      # testDataFile <- file.path(rootPath, 'data', 'DESeq.shield.testdata.RData')
+      # load(testDataFile)
+      if( input$dataType == 'rnaseq' ){
+        sampleFile <- file.path(rootPath, 'data', 'zfs-rnaseq-sampleInfo.tsv')
+        countFile <- file.path(rootPath, 'data', 'counts.shield-subset.tsv')
+      } else if(input$dataType == 'detct' ) {
+        sampleFile <- file.path(rootPath, 'data', 'zfs-detct-sampleInfo.tsv')
+        countFile <- file.path(rootPath, 'data', 'zfs-detct.subset.tsv')
+      }
+      DESeqData <- FilesToDESeqObj( sampleFile, countFile, input$dataType )
     } else{
       dataFileInfo <- input$dataFile
       sampleFileInfo <- input$sampleFile
       countFileInfo <- input$countFile
       if( !is.null(sampleFileInfo) & 
                  !is.null(countFileInfo) ){
-        DESeqData <- FilesToDESeqObj( sampleFileInfo$datapath, countFileInfo$datapath )
+        DESeqData <- FilesToDESeqObj( sampleFileInfo$datapath, countFileInfo$datapath, input$dataType )
       } else if( !is.null(dataFileInfo) ){
         load(dataFileInfo$datapath)
       }
@@ -98,8 +109,13 @@ server <- function(input, output, session) {
         return( NULL )
       }
     }
-    genes <- as.character(rowData(DESeqData)$Gene.name)
-    names(genes) <- as.character(rowData(DESeqData)$Gene.ID)
+    if( input$dataType == 'rnaseq' ){
+      genes <- as.character(rowData(DESeqData)$Gene.name)
+      names(genes) <- as.character(rowData(DESeqData)$Gene.ID)
+    } else{
+      genes <- as.character(rowData(DESeqData)$Gene.name)
+      names(genes) <- rownames(DESeqData)
+    }
     samples <- rownames(colData(DESeqData))
     names(samples) <- rownames(colData(DESeqData))
     if( testing ){
@@ -140,7 +156,7 @@ server <- function(input, output, session) {
       # and warn
       if( length(nonexistentIds) > 0 ){
         missingGenesWarning <- paste0("Some of the gene ids couldn't be matched! Ids: ", paste(nonexistentIds, collapse=", ") )
-        createAlert(session, "geneIdsWarningAlert", "geneIdsAlert", title = "Non-matching Ids",
+        createAlert(session, "HeatmapAlert", "geneIdsAlert", title = "Non-matching Ids",
                     content = missingGenesWarning, append = FALSE, style = 'warning' )
       }
       # set selected genes to ids
@@ -230,23 +246,32 @@ server <- function(input, output, session) {
       }
       # If there is only one row or col the matrix gets simplified into a vector.
       # Needs to force it to stay as a matrix
+      count <- tryCatch( counts[ names(selected$genes), names(selected$samples) ],
+                         error = function(err){
+                           if( err == 'subscript out of bounds' ){
+                             subsetErrorMsg <- 'There was an error subsetting the counts matrix. Try resetting or changing the data type.'
+                             createAlert(session, "HeatmapAlert", "subsetErrorAlert", title = "Subsetting error",
+                                         content = subsetErrorMsg, append = FALSE, style = 'danger' )
+                           } else{
+                             stop(err)
+                           }
+                         }
+      )
       if( numRow == 1 & numCol == 1 ){
-        count <- matrix( counts[ names(selected$genes), names(selected$samples) ],
+        count <- matrix( count,
                          dimnames = list( names(selected$genes), names(selected$samples) )
-                        )
+        )
       } else if( numRow == 1 ){
-        count <- matrix( counts[ names(selected$genes), names(selected$samples) ],
+        count <- matrix( count,
                          nrow = 1,
                          dimnames = list( names(selected$genes), names(selected$samples) )
-                      )
+        )
       } else if( numCol == 1 ){
-        count <- matrix( counts[ names(selected$genes), names(selected$samples) ],
+        count <- matrix( count,
                          ncol = 1,
                          dimnames = list( names(selected$genes), names(selected$samples) )
-                        )
-      } else{
-        count <- counts[ names(selected$genes), names(selected$samples) ]
-      }
+        )
+      } 
       return( count )
     }
   })

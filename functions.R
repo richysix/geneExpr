@@ -16,7 +16,7 @@
 #'
 #' @export
 #'
-FilesToDESeqObj <- function( sampleFile, countFile ){
+FilesToDESeqObj <- function( sampleFile, countFile, dataType ){
   # read in sample info
   sampleInfo <- read.table(sampleFile, sep="\t", header=TRUE, row.names = 1)
   # Read in count data
@@ -24,19 +24,26 @@ FilesToDESeqObj <- function( sampleFile, countFile ){
   
   # Support different column names
   names(data)[names(data) == 'chr']     <- 'Chr'
+  names(data)[names(data) == '#Chr']     <- 'Chr'
   names(data)[names(data) == 'start']   <- 'Start'
   names(data)[names(data) == 'end']     <- 'End'
   names(data)[names(data) == 'Gene ID']      <- 'Gene.ID'
   names(data)[names(data) == 'ID']      <- 'Gene.ID'
   names(data)[ grepl("e[0-9][0-9] Ensembl Gene ID", names(data), perl=TRUE ) ]    <- 'Gene.ID'
   names(data)[names(data) == 'Name']      <- 'Gene.name'
+  names(data)[names(data) == 'Gene name']      <- 'Gene.name'
   names(data)[names(data) == 'adjpval'] <- 'adjp'
   
   # Get count data
   countData <- data[,grepl(" count$", names(data)) &
-                      !grepl(" normalised count$", names(data))]
+                      !grepl(" normalised count$", names(data)) &
+                      !grepl(" end read count$", names(data)) ]
   names(countData) <- gsub(" count$", "", names(countData))
-  rownames(countData) <- data[ , "Gene.ID" ]
+  if( dataType == 'rnaseq' ){
+    rownames(countData) <- data[ , "Gene.ID" ]
+  } else {
+    rownames(countData) <- paste( data[['Chr']], data[['Region start']], data[['Region end']], data[["3' end strand"]], sep=":")
+  }
   
   # check column names of countData match rownames of sample info
   if( length(colnames(countData)) != length(rownames(sampleInfo)) ){
