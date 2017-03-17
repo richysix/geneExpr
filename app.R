@@ -1,5 +1,5 @@
 # load libraries
-for( package in c('shiny', 'shinyjs', 'ggplot2', 'DESeq2', 'rnaseqVis', 'rprojroot', 'DT' ) ){
+for( package in c('shiny', 'shinyjs', 'shinyBS', 'ggplot2', 'DESeq2', 'rnaseqVis', 'rprojroot', 'DT' ) ){
   library( package, character.only = TRUE )
 }
 source('functions.R')
@@ -49,7 +49,7 @@ ui <- fluidPage(
                           width = 3
                         ),
                         mainPanel(
-                          textOutput('warningsText'),
+                          bsAlert("geneIdsWarningAlert"),
                           plotOutput("exprHeatmap",
                                      dblclick = "heatmap_dblclick",
                                      brush = brushOpts(
@@ -70,7 +70,7 @@ ui <- fluidPage(
 )
 
 # server side stuff
-server <- function(input, output) {
+server <- function(input, output, session) {
   # increase max upload size to 30 MB
   options(shiny.maxRequestSize=30*1024^2)
   # ranges object for zooming plot
@@ -79,8 +79,7 @@ server <- function(input, output) {
   ids2Names <- reactiveValues() # this will contain genes and samples, both named character vectors
   selected <- reactiveValues() # this will contain genes and samples, both named character vectors
   warnings <- reactiveValues() # this will contain warning messages to display
-  missingGenes <- reactiveValues() # this will contain genes, a character vector
-  
+
   DeSeqCounts <- reactive({
     if( testing ){
       testDataFile <- file.path(rootPath, 'data', 'DESeq.shield.testdata.RData')
@@ -140,8 +139,9 @@ server <- function(input, output) {
       }
       # and warn
       if( length(nonexistentIds) > 0 ){
-        warnings$geneSubset <- "Some of the gene ids couldn't be matched!"
-        missingGenes$genes <- nonexistentIds
+        missingGenesWarning <- paste0("Some of the gene ids couldn't be matched! Ids: ", paste(nonexistentIds, collapse=", ") )
+        createAlert(session, "geneIdsWarningAlert", "geneIdsAlert", title = "Non-matching Ids",
+                    content = missingGenesWarning, append = FALSE, style = 'warning' )
       }
       # set selected genes to ids
       selected$genes <- isolate(selected$genes[ Ids ])
@@ -298,16 +298,18 @@ server <- function(input, output) {
     }
   })
   
-  output$warningsText <- renderText({
-    if( !is.null(warnings) ){
-      if( !is.null(warnings$geneSubset) ){
-        return( paste(warnings$geneSubset, missingGenes$genes, sep="\n") )
-      }
-    } else{
-      return( NULL )
-    }
-  })
+  # # create text for warning message
+  # output$warningsText <- renderText({
+  #   if( !is.null(warnings) ){
+  #     if( !is.null(warnings$geneSubset) ){
+  #       return( paste(warnings$geneSubset, missingGenes$genes, sep="\n") )
+  #     }
+  #   } else{
+  #     return( NULL )
+  #   }
+  # })
   
+  # render heatmap plot
   output$exprHeatmap <- renderPlot({
     return( heatmapObj() )
   })
