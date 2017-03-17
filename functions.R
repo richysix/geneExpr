@@ -29,6 +29,7 @@ FilesToDESeqObj <- function( sampleFile, countFile ){
   names(data)[names(data) == 'Gene ID']      <- 'Gene.ID'
   names(data)[names(data) == 'ID']      <- 'Gene.ID'
   names(data)[ grepl("e[0-9][0-9] Ensembl Gene ID", names(data), perl=TRUE ) ]    <- 'Gene.ID'
+  names(data)[names(data) == 'Name']      <- 'Gene.name'
   names(data)[names(data) == 'adjpval'] <- 'adjp'
   
   # Get count data
