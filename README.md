@@ -97,9 +97,9 @@ e.g.
   </tr>
 </table>
 
-#### RData file
+#### Subset by Gene id
 
-Alternatively, a pre-computed R data file containing a DESeq2 DESeqDataSet object can be uploaded using the **Load Data File** button 
+A text file of Ensembl gene ids to subset the heatmap to can be uploaded using this button. Any ids that can't be matched will be listed in a warning alert above the heatmap.
 
 ### Heatmap
 
@@ -123,9 +123,16 @@ The genes can be filtered according to the mean counts across all samples. Both 
 
 #### Downloads
 
+The **Download plot** button downloads the current plot as either a pdf or png.
+
 The **Download Count File** button downloads the count data for the genes and samples displayed in the heatmap.
 
 The **Download Gene List** button downloads a file containing just the gene ids for the genes and samples displayed in the heatmap.
+
+#### Load RData file
+
+As an alternative to sample/count files, a pre-computed R data file containing a DESeq2 DESeqDataSet object (named DESeqData) can be uploaded using the **Load .RData File** button 
+
 
 ## Prerequisites
 
