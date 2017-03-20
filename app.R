@@ -6,7 +6,8 @@ for (package in c('shiny',
                   'DESeq2',
                   'rnaseqVis',
                   'rprojroot',
-                  'DT')) {
+                  'DT',
+                  'genefilter')) {
   library(package, character.only = TRUE)
 }
 source('functions.R')
