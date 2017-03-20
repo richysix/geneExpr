@@ -291,10 +291,29 @@ server <- function(input, output, session) {
     if( is.null(counts) ){
       return(NULL)
     }
-    if( testing & length(input$clusterCheckGroup) > 0 ){
+    if( debug & length(input$clusterCheckGroup) > 0 ){
+      print('Function: clusteredCounts')
       print( sprintf('Cluster checkbox value: %s', input$clusterCheckGroup ) )
     }
     if( any( input$clusterCheckGroup == "1" ) ){
+      # check the genes for ones were sd is zero
+      zeroVarRows <- rowSds(counts) == 0
+      if( sum(zeroVarRows) > 0 ){
+        # remove the rows that have zero variance
+        selection <- reactiveValuesToList(selected)
+        selectedGeneIds <- names(selection$genes)[ !zeroVarRows ]
+        # show a warning saying some rows have been removed
+        clusterErrorMsg <- paste0('Some of the genes that you are trying to cluster have zero variance across the selected samples and have been removed: ',
+                                paste(names(selection$genes)[ zeroVarRows ], sep = "", collapse=", ") )
+        createAlert(session, "HeatmapAlert", "zeroVarErrorAlert", title = "Clustering error",
+                                            content = clusterErrorMsg, append = FALSE, style = 'danger' )
+        if( debug ){
+          print( sprintf('Rows removed due to zero variance = %d, Num Genes left = %d', 
+                         sum(zeroVarRows),
+                         sum(!zeroVarRows) ) )
+        }
+        selected$genes <- selection$genes[ selectedGeneIds ]
+      }
       if( any( input$clusterCheckGroup == "2" ) ){
         counts <- clusterMatrix(counts, byRow = TRUE, byCol = TRUE )
       } else{
