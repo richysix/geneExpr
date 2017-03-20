@@ -6,6 +6,7 @@ source('functions.R')
 
 # globals
 testing <- FALSE
+debug <- TRUE
 rootPath <- find_root(is_rstudio_project)
 
 # Define UI for application
@@ -37,7 +38,7 @@ ui <- fluidPage(
                           sliderInput("minMeanCount", "Mean Count Minimum Threshold:",
                                       min=0, max=1000, value=0),
                           sliderInput("maxMeanCount", "Mean Count Maximum Threshold:",
-                                      min=100, max=100000, value=100000),
+                                      min=100, max=1000000, value=1000000),
                           hr(),
                           h4('Downloads'),
                           radioButtons("plotFormat", label = h5("Plot File"),
@@ -84,6 +85,7 @@ server <- function(input, output, session) {
   selected <- reactiveValues() # this will contain genes and samples, both named character vectors
 
   DeSeqCounts <- reactive({
+    if( debug ){ print('Function: DeSeqCounts') }
     if( testing ){
       # testDataFile <- file.path(rootPath, 'data', 'DESeq.shield.testdata.RData')
       # load(testDataFile)
@@ -109,6 +111,14 @@ server <- function(input, output, session) {
         return( NULL )
       }
     }
+    
+    # calculate the max mean value and set input slider
+    maxMean <- ceiling( max( apply( counts(DESeqData, normalized = TRUE), 1, mean ) ) )
+    if( debug ){
+      print( sprintf('Max mean value: %f', maxMean ) )
+    }
+    updateSliderInput(session, "maxMeanCount", value = maxMean, max = maxMean )
+    
     if( input$dataType == 'rnaseq' ){
       genes <- as.character(rowData(DESeqData)$Gene.name)
       names(genes) <- as.character(rowData(DESeqData)$Gene.ID)
@@ -118,9 +128,10 @@ server <- function(input, output, session) {
     }
     samples <- rownames(colData(DESeqData))
     names(samples) <- rownames(colData(DESeqData))
-    if( testing ){
-      print(head(genes))
-      print(head(samples))
+    if(debug){
+      cat("Genes and Samples\n")
+      print( sprintf('Initial genes: %s', paste0(head(genes), collapse = " ") ) )
+      print( sprintf( 'Initial samples: %s', paste0(head(samples), collapse = " ") ) )
     }
     selected$genes <- genes
     selected$samples <- samples
@@ -134,7 +145,10 @@ server <- function(input, output, session) {
     if( !is.null(geneIdsFileInfo) ){
       geneInfo <- read.table(geneIdsFileInfo$datapath)
       geneIds <- as.character(geneInfo[[1]])
-      if(testing){ print( head(geneIds) ) }
+      if(debug){ 
+        print('Function: subsetGeneList')
+        print( sprintf("Genes ids for subsetting: %s", paste0(head(geneIds), collapse = ", ") ) ) 
+      }
       # check for any ids that don't exist
       nonexistentIds <- vector( 'list', length = length(geneIds) )
       Ids <- vector( 'list', length = length(geneIds) )
@@ -149,9 +163,9 @@ server <- function(input, output, session) {
       }
       nonexistentIds <- do.call(c, nonexistentIds)
       Ids <- do.call(c, Ids)
-      if( testing ){ 
+      if( debug ){ 
         print( sprintf('Missing Ids: %s', paste(nonexistentIds, collapse=" ") ) )
-        print( sprintf('Matched Ids: %s', paste(Ids, collapse = " " ) ) )
+        print( sprintf('Matched Ids: %s', paste(head(Ids), collapse = " " ) ) )
       }
       # and warn
       if( length(nonexistentIds) > 0 ){
@@ -166,6 +180,7 @@ server <- function(input, output, session) {
   
   # respond to reset button
   observeEvent(input$subsetReset, {
+    if( debug ){ print('Function: subsetReset') }
     selected$genes <- ids2Names$genes
     selected$samples <- ids2Names$samples
     reset("geneIdsFile") 
@@ -174,7 +189,8 @@ server <- function(input, output, session) {
   # retrieve normalised counts
   normalisedCounts <- reactive({
     counts <- DeSeqCounts()
-    if( testing ){
+    if( debug ){
+      print('Function: normalisedCounts')
       print( sprintf('Num Genes: %d', nrow(counts) ) )
     }
     if( is.null(counts) ){
@@ -184,23 +200,6 @@ server <- function(input, output, session) {
     }
   })
   
-  # calculate Max mean value in data
-  maxMeanValue <- reactive({
-    counts <- normalisedCounts()
-    if( is.null(counts) ){
-      return(NULL)
-    } else {
-      # calculate the max value of the row means, truncate to integer above
-      return( ceiling( max( apply( counts, 1, mean ) ) ) )
-    }
-  })
-  
-  # set slider input max value to max in data
-  observe({
-    maxMean <- maxMeanValue()
-    updateSliderInput(session, "maxMeanCount", value = maxMean, max = maxMean )
-  })
-  
   # filter counts by expression level
   filteredCounts <- reactive({
     counts <- normalisedCounts()
@@ -208,12 +207,10 @@ server <- function(input, output, session) {
       return(NULL)
     } else {
       meanCount <- apply( counts, 1, mean )
-      if( testing ){
-        print( sprintf('Max mean value: %f', max(meanCount)) )
-      }
       counts <- counts[ meanCount >= input$minMeanCount &
                           meanCount <= input$maxMeanCount, ]
-      if( testing ){
+      if( debug ){
+        print('Function: filteredCounts')
         print( sprintf('Num Genes Filtered: %d', nrow(counts) ) )
       }
       # reset selected genes to everything in counts
@@ -230,13 +227,15 @@ server <- function(input, output, session) {
     if( is.null(counts) ){
       return(NULL)
     } else {
-      if( testing ){
+      if( debug ){
+        print('Function: subsettedCounts')
         print( sprintf('selected Genes length = %d', length(reactiveValuesToList(selected)$genes) ) )
         print( sprintf('selected Samples length = %d', length(reactiveValuesToList(selected)$samples) ) )
         print( sprintf('selected Gene Ids = %s', head(names(selected$genes)) ) )
         print( sprintf('selected Gene Names = %s', head(selected$genes) ) )
         print( sprintf('selected Sample Ids = %s', head(names(selected$samples)) ))
-        print( dim( counts) )
+        print( sprintf('Filtered Counts dimensions: %d, %d', 
+                       dim(counts)[1], dim(counts)[2] ) )
       }
       numRow <- length(selected$genes)
       numCol <- length(selected$samples)
@@ -248,7 +247,13 @@ server <- function(input, output, session) {
       # Needs to force it to stay as a matrix
       count <- tryCatch( counts[ names(selected$genes), names(selected$samples) ],
                          error = function(err){
-                           if( err == 'subscript out of bounds' ){
+                           if( debug ){
+                             print("Subsetting Error")
+                             print( err )
+                             print( sprintf('Selected Genes: %s', paste(names(selected$genes), collapse = " " ) ) )
+                             print( sprintf('Selected Samples: %s', paste(names(selected$samples), collapse = " " ) ) )
+                           }
+                           if( err$message == 'subscript out of bounds' ){
                              subsetErrorMsg <- 'There was an error subsetting the counts matrix. Try resetting or changing the data type.'
                              createAlert(session, "HeatmapAlert", "subsetErrorAlert", title = "Subsetting error",
                                          content = subsetErrorMsg, append = FALSE, style = 'danger' )
@@ -271,7 +276,11 @@ server <- function(input, output, session) {
                          ncol = 1,
                          dimnames = list( names(selected$genes), names(selected$samples) )
         )
-      } 
+      }
+      if( debug ){
+        print( sprintf('Subset Counts dimensions: %d, %d', 
+                       dim(count)[1], dim(count)[2] ) )
+      }
       return( count )
     }
   })
@@ -303,7 +312,8 @@ server <- function(input, output, session) {
     if( is.null(counts) ){
       return(NULL)
     } else {
-      if( testing ){
+      if( debug ){
+        print('Function: transformedCounts')
         print( sprintf('Transform checkbox value: %s', input$transform ) )
       }
       if( input$transform == 2 ){
@@ -320,6 +330,7 @@ server <- function(input, output, session) {
   # create plot object
   heatmapObj <- reactive({
     counts <- transformedCounts()
+    print('Function: heatmapObj')
     if( is.null(counts) ){
       return(NULL)
     } else {
@@ -352,8 +363,9 @@ server <- function(input, output, session) {
   # When a double-click happens, check if there's a brush on the plot.
   # If so, zoom to the brush bounds; if not, reset the zoom.
   observeEvent(input$heatmap_dblclick, {
+    if( debug ){ print('Function: heatmap dbl-click') }
     brush <- input$heatmap_brush
-    if( testing ){
+    if( debug ){
       print( sprintf('Brush: Xmin: %s Xmax: %s Ymin: %s Ymax: %s', brush$xmin, brush$xmax, brush$ymin, brush$ymax ) )
     }
     if (!is.null(brush)) {
