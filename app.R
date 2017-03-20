@@ -392,21 +392,21 @@ server <- function(input, output, session) {
         x = floor( c(brush$xmin, brush$xmax) - c( 0.5, -0.5 ) ),
         y = floor( c(brush$ymin, brush$ymax) - c( 0.5, -0.5 ) )
       )
-      # make sure values have not gone out of range
-      # i.e. less than 0 or greater than ncol/nrow of the data
-      plotRanges$x[1] <- ifelse(plotRanges$x[1] < 1, 1, plotRanges$x[1] )
-      plotRanges$x[2] <- ifelse(plotRanges$x[2] > ncol(normalisedCounts()), ncol(normalisedCounts()), plotRanges$x[2] )
-      plotRanges$y[1] <- ifelse(plotRanges$y[1] < 1, 1, plotRanges$y[1] )
-      plotRanges$y[2] <- ifelse(plotRanges$y[2] > nrow(normalisedCounts()), nrow(normalisedCounts()), plotRanges$y[2] )
-      
-      if( testing ){
+      if( debug ){
         print( sprintf('Plot Ranges X: %f %f', plotRanges$x[1], plotRanges$x[2] ) )
         print( sprintf('Plot Ranges Y: %f %f', plotRanges$y[1], plotRanges$y[2] ) )
       }
       selection <- reactiveValuesToList(selected)
+      # make sure values have not gone out of range
+      # i.e. less than 1 or greater than num genes/samples in the current subset
+      plotRanges$x[1] <- ifelse(plotRanges$x[1] < 1, 1, plotRanges$x[1] )
+      plotRanges$x[2] <- ifelse(plotRanges$x[2] > length(selection$samples), length(selection$samples), plotRanges$x[2] )
+      plotRanges$y[1] <- ifelse(plotRanges$y[1] < 1, 1, plotRanges$y[1] )
+      plotRanges$y[2] <- ifelse(plotRanges$y[2] > length(selection$genes), length(selection$genes), plotRanges$y[2] )
+      
       selectedGeneIds <- rev( rev( names(selection$genes) )[ seq(plotRanges$y[1], plotRanges$y[2]) ] )
       selectedSampleIds <- names(selection$samples)[ seq(plotRanges$x[1], plotRanges$x[2]) ]
-      if( testing ){
+      if( debug ){
         print( sprintf('Num Genes = %d, Num Samples = %d', 
                        length(selectedGeneIds),
                        length(selectedSampleIds) ) )        
