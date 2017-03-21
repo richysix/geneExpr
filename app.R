@@ -114,7 +114,7 @@ server <- function(input, output, session) {
   ids2Names <-
     reactiveValues() # this will contain genes and samples, both named character vectors
   selected <-
-    reactiveValues() # this will contain genes and samples, both named character vectors
+    reactiveValues() # this will contain genes, samples and currentSubset, all named character vectors
   
   DeSeqCounts <- reactive({
     if (debug) {
@@ -234,6 +234,7 @@ server <- function(input, output, session) {
       }
       # set selected genes to ids
       selected$genes <- isolate(selected$genes[Ids])
+      selected$currentSubset <- isolate(selected$genes[Ids])
     }
   })
   
@@ -244,6 +245,7 @@ server <- function(input, output, session) {
     }
     selected$genes <- ids2Names$genes
     selected$samples <- ids2Names$samples
+    selected$currentSubset <- NULL
     reset("geneIdsFile")
   })
   
@@ -383,12 +385,13 @@ server <- function(input, output, session) {
       print('Function: clusteredCounts')
       print(sprintf('Cluster checkbox value: %s', input$clusterCheckGroup))
     }
+    # get gene ids
+    selection <- reactiveValuesToList(selected)
     if (any(input$clusterCheckGroup == "1")) {
       # check the genes for ones were sd is zero
       zeroVarRows <- rowSds(counts) == 0
       if (sum(zeroVarRows) > 0) {
         # remove the rows that have zero variance
-        selection <- reactiveValuesToList(selected)
         selectedGeneIds <- names(selection$genes)[!zeroVarRows]
         # show a warning saying some rows have been removed
         clusterErrorMsg <-
@@ -417,15 +420,32 @@ server <- function(input, output, session) {
           ))
         }
         selected$genes <- selection$genes[selectedGeneIds]
+        counts <- counts[ selectedGeneIds, ]
       }
       if (any(input$clusterCheckGroup == "2")) {
         counts <- clusterMatrix(counts, byRow = TRUE, byCol = TRUE)
       } else{
         counts <- clusterMatrix(counts, byRow = TRUE, byCol = FALSE)
       }
+      selected$genes <- selection$genes[ rownames(counts) ]
     } else if (any(input$clusterCheckGroup == "2")) {
       counts <- clusterMatrix(counts, byRow = FALSE, byCol = TRUE)
+    } else{
+      # reset order to original order
+      position <- integer( length = length(selection$genes) )
+      if( is.null(selected$currentSubset) ){
+        genes <- ids2Names$genes
+      } else{
+        genes <- selected$currentSubset
+      }
+      for( i in seq_len(length(selection$genes)) ){
+        geneId <- names(selection$genes)[i]
+        position[i] <- which( names(genes) == geneId )
+      }
+      selected$genes <- selection$genes[ order(position) ]
+      counts <- counts[ order(position), ]
     }
+    
     return(counts)
   })
   
@@ -444,6 +464,9 @@ server <- function(input, output, session) {
         # scale operates on the column so need to transpose, scale and then transpose back
         counts <-
           t(scale(t(counts), scale = geneMaxCounts, center = FALSE))
+        # genes with a max of zero get converted to NAs
+        # reset to zeros
+        counts[ geneMaxCounts == 0, ] <- matrix( rep(0, sum(geneMaxCounts == 0)*ncol(counts) ), ncol = ncol(counts) )
       } else if (input$transform == 3) {
         counts <- log10(counts + 1)
       }
@@ -525,8 +548,8 @@ server <- function(input, output, session) {
       )
     }
     if (!is.null(brush)) {
-      plotRanges <- list(x = floor(c(brush$xmin, brush$xmax) - c(0.5,-0.5)),
-                         y = floor(c(brush$ymin, brush$ymax) - c(0.5,-0.5)))
+      plotRanges <- list(x = floor(c(brush$xmin, brush$xmax) - c(0.5,-0.5)) + c(1,0),
+                         y = floor(c(brush$ymin, brush$ymax) - c(0.5,-0.5)) + c(1,0))
       if (debug) {
         print(sprintf('Plot Ranges X: %f %f', plotRanges$x[1], plotRanges$x[2]))
         print(sprintf('Plot Ranges Y: %f %f', plotRanges$y[1], plotRanges$y[2]))
@@ -566,7 +589,11 @@ server <- function(input, output, session) {
       selected$genes <- selection$genes[selectedGeneIds]
       selected$samples <- selection$samples[selectedSampleIds]
     } else {
-      selected$genes <- ids2Names$genes
+      if( is.null(selected$currentSubset) ){
+        selected$genes <- ids2Names$genes
+      } else{
+        selected$genes <- selected$currentSubset
+      }
       selected$samples <- ids2Names$samples
     }
   })
