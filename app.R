@@ -114,7 +114,9 @@ server <- function(input, output, session) {
   ids2Names <-
     reactiveValues() # this will contain genes and samples, both named character vectors
   selected <-
-    reactiveValues() # this will contain genes, samples and currentSubset, all named character vectors
+    reactiveValues() # this will contain genes, samples, all named character vectors
+  clustered <- 
+    reactiveValues() # this will contain genes, samples, all named character vectors
   
   DeSeqCounts <- reactive({
     if (debug) {
@@ -294,18 +296,18 @@ server <- function(input, output, session) {
         print('Function: subsettedCounts')
         print(sprintf(
           'selected Genes length = %d',
-          length(reactiveValuesToList(selected)$genes)
+          length(isolate(reactiveValuesToList(selected)$genes))
         ))
         print(sprintf(
           'selected Samples length = %d',
-          length(reactiveValuesToList(selected)$samples)
+          length(isolate(reactiveValuesToList(selected)$samples))
         ))
         print(sprintf('selected Gene Ids = %s', head(names(
-          selected$genes
+          isolate(selected$genes)
         ))))
-        print(sprintf('selected Gene Names = %s', head(selected$genes)))
+        print(sprintf('selected Gene Names = %s', head(isolate(selected$genes))))
         print(sprintf('selected Sample Ids = %s', head(names(
-          selected$samples
+          isolate(selected$samples)
         ))))
         print(sprintf(
           'Filtered Counts dimensions: %d, %d',
@@ -313,8 +315,8 @@ server <- function(input, output, session) {
           dim(counts)[2]
         ))
       }
-      numRow <- length(selected$genes)
-      numCol <- length(selected$samples)
+      numRow <- length(isolate(selected$genes))
+      numCol <- length(isolate(selected$samples))
       # If the filtered set is too small go back to all genes/samples
       if (numRow > nrow(counts) | numCol > ncol(counts)) {
         counts <- normalisedCounts()
@@ -383,67 +385,90 @@ server <- function(input, output, session) {
     }
     if (debug & length(input$clusterCheckGroup) > 0) {
       print('Function: clusteredCounts')
-      print(sprintf('Cluster checkbox value: %s', input$clusterCheckGroup))
+      print(sprintf('Cluster checkbox value: %s', paste0(isolate(input$clusterCheckGroup), collapse=" ") ) )
     }
     # get gene ids
-    selection <- reactiveValuesToList(selected)
+    selection <- isolate(reactiveValuesToList(selected))
+    err <- FALSE
     if (any(input$clusterCheckGroup == "1")) {
-      # check the genes for ones were sd is zero
-      zeroVarRows <- rowSds(counts) == 0
-      if (sum(zeroVarRows) > 0) {
-        # remove the rows that have zero variance
-        selectedGeneIds <- names(selection$genes)[!zeroVarRows]
-        # show a warning saying some rows have been removed
+      if (any(input$clusterCheckGroup == "2")) {
+        # check genes and samples for ones with zero variance
+        zeroVar <- RemoveZeroVariance( counts, rows = TRUE, cols = TRUE )
+        counts <- clusterMatrix(zeroVar$matrix, byRow = TRUE, byCol = TRUE)
+        if( !is.null(zeroVar$rowsRemoved) | !is.null(zeroVar$colsRemoved) ){
+          err <- TRUE
+        }
+      } else{
+        # check genes for ones with zero variance
+        zeroVar <- RemoveZeroVariance( counts, rows = TRUE, cols = FALSE )
+        counts <- clusterMatrix(zeroVar$matrix, byRow = TRUE, byCol = FALSE)
+        if( !is.null(zeroVar$rowsRemoved) ){
+          err <- TRUE
+        }
+      }
+      clustered$genes <- selection$genes[ rownames(counts) ]
+      clustered$samples <- selection$samples[ colnames(counts) ]
+    } else if (any(input$clusterCheckGroup == "2")) {
+      # check samples for ones with zero variance
+      zeroVar <- RemoveZeroVariance( counts, rows = FALSE, cols = TRUE )
+      counts <- clusterMatrix(zeroVar$matrix, byRow = FALSE, byCol = TRUE)
+      clustered$genes <- selection$genes[ rownames(counts) ]
+      clustered$samples <- selection$samples[ colnames(counts) ]
+      if( !is.null(zeroVar$colsRemoved) ){
+        err <- TRUE
+      }
+    } else{
+      clustered$samples <- NULL
+      clustered$genes <- NULL
+    }
+    
+    if(err){
+      # show a warning saying some genes/columns have been removed
+      clusterErrorMsg <- ''
+      if( !is.null(zeroVar$rowsRemoved) ){
         clusterErrorMsg <-
           paste0(
             'Some of the genes that you are trying to cluster have zero variance across the selected samples and have been removed: ',
-            paste(
-              names(selection$genes)[zeroVarRows],
-              sep = "",
+            paste0(
+              zeroVar$rowsRemoved,
+              collapse = ", "
+            ),
+            '<br>'
+          )
+      }
+      if( !is.null(zeroVar$colsRemoved) ){
+        clusterErrorMsg <-
+          paste0(
+            clusterErrorMsg,
+            'Some of the samples that you are trying to cluster have zero variance across the selected genes and have been removed: ',
+            paste0(
+              zeroVar$colsRemoved,
               collapse = ", "
             )
           )
-        createAlert(
-          session,
-          "HeatmapAlert",
-          "zeroVarErrorAlert",
-          title = "Clustering error",
-          content = clusterErrorMsg,
-          append = FALSE,
-          style = 'danger'
-        )
-        if (debug) {
-          print(sprintf(
-            'Rows removed due to zero variance = %d, Num Genes left = %d',
-            sum(zeroVarRows),
-            sum(!zeroVarRows)
-          ))
-        }
-        selected$genes <- selection$genes[selectedGeneIds]
-        counts <- counts[ selectedGeneIds, ]
       }
-      if (any(input$clusterCheckGroup == "2")) {
-        counts <- clusterMatrix(counts, byRow = TRUE, byCol = TRUE)
-      } else{
-        counts <- clusterMatrix(counts, byRow = TRUE, byCol = FALSE)
+      
+      createAlert(
+        session,
+        "HeatmapAlert",
+        "zeroVarErrorAlert",
+        title = "Clustering error",
+        content = clusterErrorMsg,
+        append = FALSE,
+        style = 'danger'
+      )
+      if (debug) {
+        print(sprintf(
+          'Rows removed due to zero variance = %d, Num Genes left = %d',
+          length(zeroVar$rowsRemoved),
+          length(zeroVar$rowsKept) 
+        ))
+        print( sprintf(
+          'Cols removed due to zero variance = %d, Num Samples left = %d',
+          length(zeroVar$colsRemoved),
+          length(zeroVar$colsKept)
+        ))
       }
-      selected$genes <- selection$genes[ rownames(counts) ]
-    } else if (any(input$clusterCheckGroup == "2")) {
-      counts <- clusterMatrix(counts, byRow = FALSE, byCol = TRUE)
-    } else{
-      # reset order to original order
-      position <- integer( length = length(selection$genes) )
-      if( is.null(selected$currentSubset) ){
-        genes <- ids2Names$genes
-      } else{
-        genes <- selected$currentSubset
-      }
-      for( i in seq_len(length(selection$genes)) ){
-        geneId <- names(selection$genes)[i]
-        position[i] <- which( names(genes) == geneId )
-      }
-      selected$genes <- selection$genes[ order(position) ]
-      counts <- counts[ order(position), ]
     }
     
     return(counts)
@@ -550,34 +575,52 @@ server <- function(input, output, session) {
     if (!is.null(brush)) {
       plotRanges <- list(x = floor(c(brush$xmin, brush$xmax) - c(0.5,-0.5)) + c(1,0),
                          y = floor(c(brush$ymin, brush$ymax) - c(0.5,-0.5)) + c(1,0))
+      
+      selection <- isolate(reactiveValuesToList(selected))
+      clusteredSelection <- isolate(reactiveValuesToList(clustered))
+      subset <- list( genes = NULL, samples = NULL )
+      if( is.null(clusteredSelection$genes) | is.null(clusteredSelection$samples) ){
+        subset$genes <- selection$genes
+        subset$samples <- selection$samples
+      } else{
+        subset$genes <- clusteredSelection$genes
+        subset$samples <- clusteredSelection$samples
+      }
+      
       if (debug) {
         print(sprintf('Plot Ranges X: %f %f', plotRanges$x[1], plotRanges$x[2]))
         print(sprintf('Plot Ranges Y: %f %f', plotRanges$y[1], plotRanges$y[2]))
+        print(sprintf('Selected genes: %s', paste0(head(selection$genes), collapse=", ") ) )
+        print(sprintf('Selected samples: %s', paste0(head(selection$samples), collapse=", ") ) )
+        print(sprintf('Clustered genes: %s', paste0(head(clusteredSelection$genes), collapse=", ") ) )
+        print(sprintf('Clustered samples: %s', paste0(head(clusteredSelection$samples), collapse=", ") ) )
+        print(sprintf('Subset genes: %s', paste0(head(subset$genes), collapse=", ") ) )
+        print(sprintf('Subset samples: %s', paste0(head(subset$samples), collapse=", ") ) )
       }
-      selection <- reactiveValuesToList(selected)
+
       # make sure values have not gone out of range
       # i.e. less than 1 or greater than num genes/samples in the current subset
       plotRanges$x[1] <-
         ifelse(plotRanges$x[1] < 1, 1, plotRanges$x[1])
       plotRanges$x[2] <-
         ifelse(
-          plotRanges$x[2] > length(selection$samples),
-          length(selection$samples),
+          plotRanges$x[2] > length(subset$samples),
+          length(subset$samples),
           plotRanges$x[2]
         )
       plotRanges$y[1] <-
         ifelse(plotRanges$y[1] < 1, 1, plotRanges$y[1])
       plotRanges$y[2] <-
         ifelse(
-          plotRanges$y[2] > length(selection$genes),
-          length(selection$genes),
+          plotRanges$y[2] > length(subset$genes),
+          length(subset$genes),
           plotRanges$y[2]
         )
       
       selectedGeneIds <-
-        rev(rev(names(selection$genes))[seq(plotRanges$y[1], plotRanges$y[2])])
+        rev(rev(names(subset$genes))[seq(plotRanges$y[1], plotRanges$y[2])])
       selectedSampleIds <-
-        names(selection$samples)[seq(plotRanges$x[1], plotRanges$x[2])]
+        names(subset$samples)[seq(plotRanges$x[1], plotRanges$x[2])]
       if (debug) {
         print(sprintf(
           'Num Genes = %d, Num Samples = %d',
@@ -586,8 +629,27 @@ server <- function(input, output, session) {
         ))
       }
       
-      selected$genes <- selection$genes[selectedGeneIds]
-      selected$samples <- selection$samples[selectedSampleIds]
+      # reset order to original order
+      genePosition <- integer( length = length(selectedGeneIds) )
+      if( is.null(selected$currentSubset) ){
+        genes <- isolate(ids2Names$genes)
+      } else{
+        genes <- isolate(selected$currentSubset)
+      }
+      for( i in seq_len(length(selectedGeneIds)) ){
+        geneId <- selectedGeneIds[i]
+        genePosition[i] <- which( names(genes) == geneId )
+      }
+      selected$genes <- selection$genes[ selectedGeneIds[ order(genePosition) ] ]
+      
+      samplePosition <- integer( length = length(selectedSampleIds) )
+      samples <- isolate(ids2Names$samples)
+      for( i in seq_len(length(selectedSampleIds)) ){
+        sampleId <- selectedSampleIds[i]
+        samplePosition[i] <- which( names(samples) == sampleId )
+      }
+      selected$samples <- selection$samples[ selectedSampleIds[ order(samplePosition) ] ]
+      
     } else {
       if( is.null(selected$currentSubset) ){
         selected$genes <- ids2Names$genes

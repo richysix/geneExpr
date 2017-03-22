@@ -84,3 +84,76 @@ FilesToDESeqObj <- function( sampleFile, countFile, dataType ){
   
   return( DESeqData )
 }
+
+#' RemoveZeroVariance
+#'
+#' \code{RemoveZeroVariance} removes rows/columns from a matrix that have zero variance
+#'
+#'    
+#'    
+#' @param x - matrix
+#' @param rows - logical, default TRUE
+#' @param cols - logical, default FALSE
+#'
+#' @return a list containing the following elements
+#' 
+#'    matrix - the supplied matrix with the rows/columns removed
+#'    
+#'    rowsKept - a character vector with the names of the rows that were not removed
+#'      NULL if rows = FALSE
+#'    
+#'    rowsRemoved - a character vector with the names of the rows that were removed
+#'      NULL if rows = FALSE
+#'      
+#'    colsKept - a character vector with the names of the columns that were not removed
+#'      NULL if cols = FALSE
+#'      
+#'    colsRemoved - a character vector with the names of the columns that were removed
+#'      NULL if cols = FALSE
+#'
+#' @examples
+#' countMatrix <- matrix( sample(1:100, 100), ncol = 10)
+#' countMatrix[ 3, ] <- rep(0,10)
+#' countMatrix[ 6, ] <- rep(0,10)
+#' RemoveZeroVariance( countMatrix, rows = TRUE, cols = TRUE )
+#'
+#' @export
+#'
+RemoveZeroVariance <- function( x, rows = TRUE, cols = FALSE ){
+  # check matrix has row and col names
+  if( rows & is.null(rownames(x)) ){
+    stop("The supplied matrix does not have row names!")
+  } else if( cols & is.null(colnames(x)) ){
+    stop("The supplied matrix does not have column names!")
+  }
+  rowsKept <- NULL
+  rowsRemoved <- NULL
+  colsKept <- NULL
+  colsRemoved <- NULL
+  if( rows ){
+    zeroVarRows <- rowSds(x) == 0
+    if (sum(zeroVarRows) > 0) {
+      rowsKept <- rownames(x)[ !zeroVarRows ]
+      rowsRemoved <- rownames(x)[ zeroVarRows ]
+      x <- x[ !zeroVarRows, ]
+    }
+  }
+  if( cols ){
+    zeroVarCols <- rowSds(t(x)) == 0
+    if (sum(zeroVarCols) > 0) {
+      colsKept <- colnames(x)[ !zeroVarCols ]
+      colsRemoved <- colnames(x)[ zeroVarCols ]
+      x <- x[ , !zeroVarCols ]
+    }
+  }
+  return(
+    list(
+      matrix = x,
+      rowsKept = rowsKept,
+      rowsRemoved = rowsRemoved,
+      colsKept = colsKept,
+      colsRemoved = colsRemoved
+    )
+  )
+}
+
