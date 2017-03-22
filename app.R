@@ -137,7 +137,7 @@ server <- function(input, output, session) {
           file.path(rootPath, 'data', 'zfs-detct.subset.tsv')
       }
       DESeqData <-
-        FilesToDESeqObj(sampleFile, countFile, input$dataType)
+        FilesToDESeqObj(sampleFile, countFile, input$dataType, session)
     } else{
       dataFileInfo <- input$dataFile
       sampleFileInfo <- input$sampleFile
@@ -147,7 +147,8 @@ server <- function(input, output, session) {
         DESeqData <-
           FilesToDESeqObj(sampleFileInfo$datapath,
                           countFileInfo$datapath,
-                          input$dataType)
+                          input$dataType,
+                          session)
       } else if (!is.null(dataFileInfo)) {
         load(dataFileInfo$datapath)
       }
@@ -423,6 +424,9 @@ server <- function(input, output, session) {
     }
     
     if(err){
+      # first close any open alerts
+      closeAlert(session, "zeroVarErrorAlert")
+      
       # show a warning saying some genes/columns have been removed
       clusterErrorMsg <- ''
       if( !is.null(zeroVar$rowsRemoved) ){

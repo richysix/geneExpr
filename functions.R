@@ -16,7 +16,7 @@
 #'
 #' @export
 #'
-FilesToDESeqObj <- function( sampleFile, countFile, dataType ){
+FilesToDESeqObj <- function( sampleFile, countFile, dataType, session ){
   # read in sample info
   sampleInfo <- read.table(sampleFile, sep="\t", header=TRUE, row.names = 1)
   # Read in count data
@@ -46,21 +46,42 @@ FilesToDESeqObj <- function( sampleFile, countFile, dataType ){
   }
   
   # check column names of countData match rownames of sample info
-  if( length(colnames(countData)) != length(rownames(sampleInfo)) ){
-      stop("Number of columns in counts file does not match number of rows in samples file")
-  } else if( !identical(colnames(countData), rownames(sampleInfo)) ){
-    # order count data in the same order as the samples
-    sampleOrder <- sapply( rownames(sampleInfo), 
-                           function(x){ 
-                             Idx <- which( colnames(countData) == x )
-                             if( length(Idx) == 0 ){
-                               stop( sprintf('Could not find sample, %s, in count data columns!', x) )
-                             }
-                             return(Idx)
-                           } )
-    countData <- countData[ , sampleOrder ]
+  # check for samples that don't exist
+  missingSamples <- vector('list', length = length(rownames(sampleInfo)))
+  Samples <- vector('list', length = length(rownames(sampleInfo)))
+  for (i in seq_len(length(rownames(sampleInfo)))) {
+    if (sum(colnames(countData) == rownames(sampleInfo)[i]) == 0) {
+      missingSamples[[i]] <- rownames(sampleInfo)[i]
+      Samples[[i]] <- NULL
+    } else{
+      missingSamples[i] <- NULL
+      Samples[[i]] <- rownames(sampleInfo)[i]
+    }
   }
-  
+  missingSamples <- do.call(c, missingSamples)
+  Samples <- do.call(c, Samples)
+  # and warn
+  if (length(missingSamples) > 0) {
+    missingSamplesWarning <-
+      paste0(
+        "Some of the sample Ids couldn't be matched in the count file header! <br>Ids: ",
+        paste(missingSamples, collapse = ", ")
+      )
+    createAlert(
+      session,
+      "HeatmapAlert",
+      "sampleIdsAlert",
+      title = "Non-matching Sample Ids",
+      content = missingSamplesWarning,
+      append = FALSE,
+      style = 'warning'
+    )
+  }
+  # reorder columns of countData based on sample names
+  countData <- countData[ , Samples ]
+  # and subset sample data to Samples
+  sampleInfo <- sampleInfo[ Samples, ]
+
   # change sample names if sample names present in sample file
   if( any( colnames( sampleInfo ) == 'sampleName' ) ){
     colnames(countData) <- sampleInfo$sampleName
