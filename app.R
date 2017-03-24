@@ -10,7 +10,7 @@ for (package in c('shiny',
                   'genefilter')) {
   library(package, character.only = TRUE)
 }
-source('functions.R')
+source('R/functions.R')
 
 # globals
 testing <- FALSE
