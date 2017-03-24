@@ -80,18 +80,13 @@ FilesToDESeqObj <- function( sampleFile, countFile, dataType, session ){
   # reorder columns of countData based on sample names
   countData <- countData[ , Samples ]
   # and subset sample data to Samples
-  sampleInfo <- sampleInfo[ Samples, ]
+  sampleInfo <- sampleInfo[ Samples, , drop = FALSE ] # make sure it stays as a data.frame with drop = F
 
   # change sample names if sample names present in sample file
   if( any( colnames( sampleInfo ) == 'sampleName' ) ){
     colnames(countData) <- sampleInfo$sampleName
     rownames(sampleInfo) <- sampleInfo$sampleName
-    if( sum(!grepl("sampleName", colnames(sampleInfo) ) ) == 1 ){
-      samples <- data.frame( condition = sampleInfo[ , !grepl("sampleName", colnames(sampleInfo) ) ],
-                             row.names = rownames(sampleInfo) )
-    } else {
-      samples <- sampleInfo[ , !grepl("sampleName", colnames(sampleInfo) ) ]
-    }
+    samples <- sampleInfo[ , !grepl("sampleName", colnames(sampleInfo) ), drop = FALSE ]
   } else {
     samples <- sampleInfo
   }
