@@ -67,7 +67,7 @@ FilesToDESeqObj <- function( sampleFile, countFile, dataType, session ){
         "Some of the sample Ids couldn't be matched in the count file header! <br>Ids: ",
         paste(missingSamples, collapse = ", ")
       )
-    createAlert(
+    shinyBS::createAlert(
       session,
       "HeatmapAlert",
       "sampleIdsAlert",
@@ -97,8 +97,8 @@ FilesToDESeqObj <- function( sampleFile, countFile, dataType, session ){
   }
   
   # make DESeq2 object
-  DESeqData <- DESeqDataSetFromMatrix(countData, samples, design = ~ condition)
-  DESeqData <- estimateSizeFactors(DESeqData)
+  DESeqData <- DESeq2::DESeqDataSetFromMatrix(countData, samples, design = ~ condition)
+  DESeqData <- DESeq2::estimateSizeFactors(DESeqData)
   # add metadata
   featureData <- data[ , !grepl("count", colnames(data) ) ]
   mcols(DESeqData) <- DataFrame(mcols(DESeqData), featureData)
@@ -152,20 +152,24 @@ RemoveZeroVariance <- function( x, rows = TRUE, cols = FALSE ){
   colsKept <- NULL
   colsRemoved <- NULL
   if( rows ){
-    zeroVarRows <- rowSds(x) == 0
+    zeroVarRows <- genefilter::rowSds(x) == 0
     if (sum(zeroVarRows) > 0) {
       rowsKept <- rownames(x)[ !zeroVarRows ]
       rowsRemoved <- rownames(x)[ zeroVarRows ]
       x <- x[ !zeroVarRows, ]
     }
+  } else{
+    rowsKept <- rownames(x)
   }
   if( cols ){
-    zeroVarCols <- rowSds(t(x)) == 0
+    zeroVarCols <- genefilter::rowSds(t(x)) == 0
     if (sum(zeroVarCols) > 0) {
       colsKept <- colnames(x)[ !zeroVarCols ]
       colsRemoved <- colnames(x)[ zeroVarCols ]
       x <- x[ , !zeroVarCols ]
     }
+  } else{
+    colsKept <- colnames(x)
   }
   return(
     list(
