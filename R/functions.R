@@ -177,3 +177,67 @@ RemoveZeroVariance <- function( x, rows = TRUE, cols = FALSE ){
   )
 }
 
+#' check_for_missing_ids
+#'
+#' \code{check_for_missing_ids} checks one list of gene Ids against another.
+#'
+#'    Takes a list of gene ids and compares it to another supplied list and 
+#'    returns two vectors: 
+#'      the ids from the first list that exist in the second
+#'      the ids from the first list that aren't present in the second
+#'    
+#' @param gene_ids character - vector of gene ids to check
+#' @param all_gene_ids character - vector of gene ids to check against
+#'
+#' @return list 
+#'    ids character - vector of ids from gene_ids that are present in all_gene_ids
+#'    missing_ids character - vector of ids from gene_ids that aren't in all_gene_ids
+#'
+#' @examples
+#' check_for_missing_ids(
+#'  c("ENSDARG00000062262", "ENSDARG00000061177", "ENSDARG00000078828", "ENSDARG00000077467"),
+#'  c("ENSDARG00000062262", "ENSDARG00000078828", "ENSDARG00000077467")
+#' )
+#'
+#' @export
+#'
+check_for_missing_ids <- function( gene_ids, all_gene_ids ){
+  # check for any ids that don't exist in the current subset
+  idsExist <- do.call(c, lapply(gene_ids, function(x){ any(all_gene_ids == x) } ))
+  Ids <- gene_ids[ idsExist ]
+  nonexistentIds <- gene_ids[ !idsExist ]
+  return(list(ids = Ids, missing_ids = nonexistentIds))
+}
+
+#' missing_genes_warning
+#'
+#' \code{missing_genes_warning} generates a warning alert for missing gene ids
+#'
+#'    Generates a bootstrap warning alert
+#'    
+#' @param nonexistentIds character - vector of missing gene ids to warn about
+#'
+#' @examples
+#' missing_genes_warning(
+#'  c("ENSDARG00000061177")
+#' )
+#'
+#' @export
+#'
+missing_genes_warning <- function(nonexistentIds, session){
+  missingGenesWarning <-
+    paste0(
+      "Some of the gene ids couldn't be matched! Ids: ",
+      paste(nonexistentIds, collapse = ", ")
+    )
+  shinyBS::createAlert(
+    session,
+    "HeatmapAlert",
+    "geneIdsAlert",
+    title = "Non-matching Ids",
+    content = missingGenesWarning,
+    append = FALSE,
+    style = 'warning'
+  )
+}
+
