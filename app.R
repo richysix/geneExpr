@@ -200,40 +200,16 @@ server <- function(input, output, session) {
           paste0(head(geneIds), collapse = ", ")
         ))
       }
-      # check for any ids that don't exist
-      nonexistentIds <- vector('list', length = length(geneIds))
-      Ids <- vector('list', length = length(geneIds))
-      for (i in seq_len(length(geneIds))) {
-        if (sum(names(ids2Names$genes) == geneIds[i]) == 0) {
-          nonexistentIds[[i]] <- geneIds[i]
-          Ids[[i]] <- NULL
-        } else{
-          nonexistentIds[i] <- NULL
-          Ids[[i]] <- geneIds[i]
-        }
-      }
-      nonexistentIds <- do.call(c, nonexistentIds)
-      Ids <- do.call(c, Ids)
+      ids <- check_for_missing_ids( geneIds, names(isolate(ids2Names$genes)) )
+      Ids <- ids$ids
+      nonexistentIds <- ids$missing_ids
       if (debug) {
         print(sprintf('Missing Ids: %s', paste(nonexistentIds, collapse = " ")))
         print(sprintf('Matched Ids: %s', paste(head(Ids), collapse = " ")))
       }
       # and warn
       if (length(nonexistentIds) > 0) {
-        missingGenesWarning <-
-          paste0(
-            "Some of the gene ids couldn't be matched! Ids: ",
-            paste(nonexistentIds, collapse = ", ")
-          )
-        createAlert(
-          session,
-          "HeatmapAlert",
-          "geneIdsAlert",
-          title = "Non-matching Ids",
-          content = missingGenesWarning,
-          append = FALSE,
-          style = 'warning'
-        )
+        missing_genes_warning(nonexistentIds, session)
       }
       # set selected genes to ids
       selected$genes <- isolate(selected$genes[Ids])
@@ -322,11 +298,27 @@ server <- function(input, output, session) {
       if (numRow > nrow(counts) | numCol > ncol(counts)) {
         counts <- normalisedCounts()
       }
+      # check for missing ids
+      ids <- check_for_missing_ids( names(isolate(selected$genes)), names(isolate(ids2Names$genes)) )
+      Ids <- ids$ids
+      nonexistentIds <- ids$missing_ids
+      if (debug) {
+        print(sprintf('Missing Ids: %s', paste(nonexistentIds, collapse = " ")))
+        print(sprintf('Matched Ids: %s', paste(head(Ids), collapse = " ")))
+      }
+      # and warn
+      if (length(nonexistentIds) > 0) {
+        missing_genes_warning(nonexistentIds, session)
+      }
+      # set selected genes to ids
+      selected$genes <- isolate(selected$genes[Ids])
+      selected$currentSubset <- isolate(selected$genes[Ids])
+      
       # If there is only one row or col the matrix gets simplified into a vector.
-      # Needs to force it to stay as a matrix
+      # Needs to force it to stay as a matrix using drop = FALSE
       count <-
         tryCatch(
-          counts[names(selected$genes), names(selected$samples)],
+          counts[names(selected$genes), names(selected$samples), drop = FALSE],
           error = function(err) {
             if (debug) {
               print("Subsetting Error")
@@ -355,18 +347,18 @@ server <- function(input, output, session) {
             }
           }
         )
-      if (numRow == 1 & numCol == 1) {
-        count <- matrix(count,
-                        dimnames = list(names(selected$genes), names(selected$samples)))
-      } else if (numRow == 1) {
-        count <- matrix(count,
-                        nrow = 1,
-                        dimnames = list(names(selected$genes), names(selected$samples)))
-      } else if (numCol == 1) {
-        count <- matrix(count,
-                        ncol = 1,
-                        dimnames = list(names(selected$genes), names(selected$samples)))
-      }
+      # if (numRow == 1 & numCol == 1) {
+      #   count <- matrix(count,
+      #                   dimnames = list(names(selected$genes), names(selected$samples)))
+      # } else if (numRow == 1) {
+      #   count <- matrix(count,
+      #                   nrow = 1,
+      #                   dimnames = list(names(selected$genes), names(selected$samples)))
+      # } else if (numCol == 1) {
+      #   count <- matrix(count,
+      #                   ncol = 1,
+      #                   dimnames = list(names(selected$genes), names(selected$samples)))
+      # }
       if (debug) {
         print(sprintf(
           'Subset Counts dimensions: %d, %d',
