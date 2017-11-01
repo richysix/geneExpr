@@ -118,9 +118,9 @@ server <- function(input, output, session) {
   clustered <- 
     reactiveValues() # this will contain genes, samples, all named character vectors
   
-  DeSeqCounts <- reactive({
+  normalisedCounts <- reactive({
     if (debug) {
-      print('Function: DeSeqCounts')
+      print('Function: normalisedCounts')
     }
     if (testing) {
       # testDataFile <- file.path(rootPath, 'data', 'DESeq.shield.testdata.RData')
@@ -136,16 +136,16 @@ server <- function(input, output, session) {
         countFile <-
           file.path(rootPath, 'data', 'zfs-detct.subset.tsv')
       }
-      DESeqData <-
-        FilesToDESeqObj(sampleFile, countFile, input$dataType, session)
+      exptData <-
+        load_data(sampleFile, countFile, input$dataType, session)
     } else{
       dataFileInfo <- input$dataFile
       sampleFileInfo <- input$sampleFile
       countFileInfo <- input$countFile
       if (!is.null(sampleFileInfo) &
           !is.null(countFileInfo)) {
-        DESeqData <-
-          FilesToDESeqObj(sampleFileInfo$datapath,
+        exptData <-
+          load_data(sampleFileInfo$datapath,
                           countFileInfo$datapath,
                           input$dataType,
                           session)
@@ -159,23 +159,21 @@ server <- function(input, output, session) {
     
     # calculate the max mean value and set input slider
     maxMean <-
-      ceiling(max(apply(
-        counts(DESeqData, normalized = TRUE), 1, mean
-      )))
+      ceiling(max(apply(assays(exptData)$norm_counts, 1, mean)))
     if (debug) {
       print(sprintf('Max mean value: %f', maxMean))
     }
     updateSliderInput(session, "maxMeanCount", value = maxMean, max = maxMean)
     
     if (input$dataType == 'rnaseq') {
-      genes <- as.character(rowData(DESeqData)$Gene.name)
-      names(genes) <- as.character(rowData(DESeqData)$Gene.ID)
+      genes <- rowData(exptData)$Gene.name
+      names(genes) <- rowData(exptData)$Gene.ID
     } else{
-      genes <- as.character(rowData(DESeqData)$Gene.name)
-      names(genes) <- rownames(DESeqData)
+      genes <- rowData(exptData)$Gene.name
+      names(genes) <- rownames(exptData)
     }
-    samples <- rownames(colData(DESeqData))
-    names(samples) <- rownames(colData(DESeqData))
+    samples <- rownames(colData(exptData))
+    names(samples) <- rownames(colData(exptData))
     if (debug) {
       cat("Genes and Samples\n")
       print(sprintf('Initial genes: %s', paste0(head(genes), collapse = " ")))
@@ -185,7 +183,7 @@ server <- function(input, output, session) {
     selected$samples <- samples
     ids2Names$genes <- genes
     ids2Names$samples <- samples
-    return(DESeqData)
+    return(assays(exptData)$norm_counts)
   })
   
   subsetGeneList <- observe({
@@ -226,20 +224,6 @@ server <- function(input, output, session) {
     selected$samples <- ids2Names$samples
     selected$currentSubset <- NULL
     reset("geneIdsFile")
-  })
-  
-  # retrieve normalised counts
-  normalisedCounts <- reactive({
-    counts <- DeSeqCounts()
-    if (debug) {
-      print('Function: normalisedCounts')
-      print(sprintf('Num Genes: %d', nrow(counts)))
-    }
-    if (is.null(counts)) {
-      return(NULL)
-    } else {
-      return(counts(DeSeqCounts(), normalized = TRUE))
-    }
   })
   
   # filter counts by expression level

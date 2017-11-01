@@ -1,22 +1,28 @@
-#' FilesToDESeqObj
+#' load_data
 #'
-#' \code{FilesToDESeqObj} returns a DESeqDataSet object produced from the supplied sample and count files 
+#' \code{load_data} returns a matrix of normalized counts produced from the supplied sample and count files 
 #'
-#'    The first column of the sample file must match the sample names in the column names of the count file
-#'    The sample file must also have a column labelled "condition" for the DESeq2 design formula.
+#'    The first column of the sample file must match the sample names in the column names of the count file.
+#'    A warning will be produced detailing and sample names present in the sample file but not the count file.
+#'    If the count file contains normalised count columns these will be used.
+#'    Otherwise the counts will be used to create normalised counts from DESeq2.
+#'    For this, the sample file must also have a column labelled "condition" for the DESeq2 design formula.
+#'    
 #'    If the samples file contains a column labelled "sampleName" the samples will be renamed.
 #'    
 #' @param sampleFile character - name of the sample file
 #' @param countFile character - name of the count file
-#'
-#' @return a DESeqDataSet object
+#' @param dataType character - type fo data, either 'rnaseq' or 'detct'
+#' @param session session_object
+#' 
+#' @return matrix
 #'
 #' @examples
-#' FilesToDESeqObj( 'samples.txt', 'all.tsv' )
+#' load_data( 'samples.txt', 'all.tsv', 'rnaseq', session_obj )
 #'
 #' @export
 #'
-FilesToDESeqObj <- function( sampleFile, countFile, dataType, session ){
+load_data <- function( sampleFile, countFile, dataType, session ){
   # read in sample info
   sampleInfo <- read.table(sampleFile, sep="\t", header=TRUE, row.names = 1)
   # Read in count data
@@ -33,24 +39,78 @@ FilesToDESeqObj <- function( sampleFile, countFile, dataType, session ){
   names(data)[names(data) == 'Name']      <- 'Gene.name'
   names(data)[names(data) == 'Gene name']      <- 'Gene.name'
   names(data)[names(data) == 'adjpval'] <- 'adjp'
+  names(data)[names(data) == 'Gene description']      <- 'Gene.description'
   
-  # Get count data
-  countData <- data[,grepl(" count$", names(data)) &
-                      !grepl(" normalised count$", names(data)) &
-                      !grepl(" end read count$", names(data)) ]
-  names(countData) <- gsub(" count$", "", names(countData))
+  # convert gene id and gene name to character
+  data[['Gene.ID']] <- as.character(data[['Gene.ID']])
+  data[['Gene.name']] <- as.character(data[['Gene.name']])
+  data[['Gene.description']] <- as.character(data[['Gene.description']])
+  
   if( dataType == 'rnaseq' ){
-    rownames(countData) <- data[ , "Gene.ID" ]
+    rownames(data) <- data[ , "Gene.ID" ]
   } else {
-    rownames(countData) <- paste( data[['Chr']], data[['Region start']], data[['Region end']], data[["3' end strand"]], sep=":")
+    rownames(data) <- paste( data[['Chr']], data[['Region start']], data[['Region end']], data[["3' end strand"]], sep=":")
   }
   
+  # check for normalised counts
+  if ( any(grepl(" normalised count$", names(data))) ) {
+    # Get count data
+    countData <- data[,grepl(" normalised count$", names(data))]
+    names(countData) <- gsub(" normalised count$", "", names(countData))
+    rearrangedData <- check_samples(countData, sampleInfo, session)
+    countData <- rearrangedData[[1]]
+    samples <- rearrangedData[[2]]
+  } else {
+    # Get count data
+    countData <- data[,grepl(" count$", names(data)) &
+                        !grepl(" normalised count$", names(data)) &
+                        !grepl(" end read count$", names(data)) ]
+    names(countData) <- gsub(" count$", "", names(countData))
+    rearrangedData <- check_samples(countData, sampleInfo, session)
+    countData <- rearrangedData[[1]]
+    samples <- rearrangedData[[2]]
+    countData <- normalise_counts(countData, samples)
+  }
+  
+  # make a Summarized Experiment object so that metadata is included
+  se <- SummarizedExperiment(
+    assays = list(norm_counts = countData),
+    rowData = DataFrame(data[, !grepl('count', names(data))]),
+    colData = samples
+  )
+  return(se)
+}
+
+#' check_samples
+#'
+#' \code{check_samples} returns a matrix of normalized counts produced from the supplied sample and count files 
+#'
+#'    The first column of the sample file must match the sample names in the column names of the count file.
+#'    A warning will be produced detailing and sample names present in the sample file but not the count file.
+#'    If the count file contains normalised count columns these will be used.
+#'    Otherwise the counts will be used to create normalised counts from DESeq2.
+#'    For this, the sample file must also have a column labelled "condition" for the DESeq2 design formula.
+#'    
+#'    If the samples file contains a column labelled "sampleName" the samples will be renamed.
+#'    
+#' @param countData matrix
+#' @param sampleInfo data.frame
+#' @param session session_object
+#' 
+#' @return list - two item list with countData and samples
+#'
+#' @examples
+#' check_samples( countData, sampleInfo, session )
+#'
+#' @export
+#'
+check_samples <- function(countData, sampleInfo, session) {
   # check column names of countData match rownames of sample info
   # check for samples that don't exist
   missingSamples <- vector('list', length = length(rownames(sampleInfo)))
   Samples <- vector('list', length = length(rownames(sampleInfo)))
   for (i in seq_len(length(rownames(sampleInfo)))) {
-    if (sum(colnames(countData) == rownames(sampleInfo)[i]) == 0) {
+    if (!any(colnames(countData) == rownames(sampleInfo)[i])) {
       missingSamples[[i]] <- rownames(sampleInfo)[i]
       Samples[[i]] <- NULL
     } else{
@@ -81,7 +141,7 @@ FilesToDESeqObj <- function( sampleFile, countFile, dataType, session ){
   countData <- countData[ , Samples ]
   # and subset sample data to Samples
   sampleInfo <- sampleInfo[ Samples, , drop = FALSE ] # make sure it stays as a data.frame with drop = F
-
+  
   # change sample names if sample names present in sample file
   if( any( colnames( sampleInfo ) == 'sampleName' ) ){
     colnames(countData) <- sampleInfo$sampleName
@@ -90,15 +150,28 @@ FilesToDESeqObj <- function( sampleFile, countFile, dataType, session ){
   } else {
     samples <- sampleInfo
   }
-  
+  return(list(countData, samples))
+}
+
+#' normalise_counts
+#'
+#' \code{normalise_counts} returns a matrix of normalised counts produced from counts using DESeq2.
+#'
+#' @param countData character - name of the sample file
+#' @param samples data.frame - must contain a column called condition
+#'
+#' @return matrix - normalised counts
+#'
+#' @examples
+#' normalise_counts( countData, samples )
+#'
+#' @export
+#'
+normalise_counts <- function( countData, samples ){
   # make DESeq2 object
   DESeqData <- DESeq2::DESeqDataSetFromMatrix(countData, samples, design = ~ condition)
   DESeqData <- DESeq2::estimateSizeFactors(DESeqData)
-  # add metadata
-  featureData <- data[ , !grepl("count", colnames(data) ) ]
-  mcols(DESeqData) <- DataFrame(mcols(DESeqData), featureData)
-  
-  return( DESeqData )
+  return( counts(DESeqData, normalized = TRUE) )
 }
 
 #' RemoveZeroVariance
