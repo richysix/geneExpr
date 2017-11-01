@@ -43,7 +43,8 @@ ui <- fluidPage(useShinyjs(),
                                  choices = list(
                                    "Raw" = 1,
                                    "Max Scaled" = 2,
-                                   "log 10" = 3
+                                   "log 10" = 3,
+                                   "Mean Centred and Scaled" = 4
                                  ),
                                  selected = 1
                                ),
@@ -474,6 +475,9 @@ server <- function(input, output, session) {
         counts[ geneMaxCounts == 0, ] <- matrix( rep(0, sum(geneMaxCounts == 0)*ncol(counts) ), ncol = ncol(counts) )
       } else if (input$transform == 3) {
         counts <- log10(counts + 1)
+      } else if (input$transform == 4) {
+        # scale operates on the column so need to transpose, scale and then transpose back
+        counts <- t(scale(t(counts)))
       }
       return(counts)
     }
