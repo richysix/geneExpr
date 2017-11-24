@@ -455,7 +455,7 @@ server <- function(input, output, session) {
     return(counts)
   })
   
-  # transform counts. max scaled/log10
+  # transform counts. max scaled/log10/centred and scaled
   transformedCounts <- reactive({
     counts <- clusteredCounts()
     if (is.null(counts)) {
@@ -528,6 +528,10 @@ server <- function(input, output, session) {
             hjust = 1,
             debug = FALSE
           ))
+      }
+      if (input$transform == 4) {
+        plot <- plot +
+          scale_fill_distiller(type= 'div', palette = "RdBu")
       }
       return(plot)
     }
