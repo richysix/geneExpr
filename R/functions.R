@@ -40,11 +40,12 @@ load_data <- function( sampleFile, countFile, dataType, session ){
   names(data)[names(data) == 'Gene name']      <- 'Gene.name'
   names(data)[names(data) == 'adjpval'] <- 'adjp'
   names(data)[names(data) == 'Gene description']      <- 'Gene.description'
+  names(data)[names(data) == 'Description']      <- 'Gene.description'
   
   # convert gene id and gene name to character
   data[['Gene.ID']] <- as.character(data[['Gene.ID']])
   data[['Gene.name']] <- as.character(data[['Gene.name']])
-  data[['Gene.description']] <- as.character(data[['Gene.description']])
+#  data[['Gene.description']] <- as.character(data[['Gene.description']])
   
   if( dataType == 'rnaseq' ){
     rownames(data) <- data[ , "Gene.ID" ]
@@ -53,10 +54,10 @@ load_data <- function( sampleFile, countFile, dataType, session ){
   }
   
   # check for normalised counts
-  if ( any(grepl(" normalised count$", names(data))) ) {
+  if ( any(grepl(".normalised.count$", names(data), perl = TRUE)) ) {
     # Get count data
-    countData <- data[,grepl(" normalised count$", names(data))]
-    names(countData) <- gsub(" normalised count$", "", names(countData))
+    countData <- data[,grepl(".normalised.count$", names(data), perl = TRUE)]
+    names(countData) <- gsub(".normalised.count$", "", names(countData), perl = TRUE)
     rearrangedData <- check_samples(countData, sampleInfo, session)
     countData <- rearrangedData[[1]]
     samples <- rearrangedData[[2]]
@@ -74,7 +75,7 @@ load_data <- function( sampleFile, countFile, dataType, session ){
   
   # make a Summarized Experiment object so that metadata is included
   se <- SummarizedExperiment(
-    assays = list(norm_counts = countData),
+    assays = list(norm_counts = as.matrix(countData)),
     rowData = DataFrame(data[, !grepl('count', names(data))]),
     colData = samples
   )
