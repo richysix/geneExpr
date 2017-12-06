@@ -107,8 +107,8 @@ ui <- fluidPage(useShinyjs(),
 
 # server side stuff
 server <- function(input, output, session) {
-  # increase max upload size to 100 MB
-  options(shiny.maxRequestSize = 100 * 1024 ^ 2)
+  # increase max upload size to 200 MB
+  options(shiny.maxRequestSize = 200 * 1024 ^ 2)
   # ranges object for zooming plot
   ranges <- reactiveValues(x = NULL,
                            y = NULL)
