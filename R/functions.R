@@ -50,7 +50,9 @@ load_data <- function( sampleFile, countFile, dataType, session ){
   if( dataType == 'rnaseq' ){
     rownames(data) <- data[ , "Gene.ID" ]
   } else {
-    rownames(data) <- paste( data[['Chr']], data[['Region start']], data[['Region end']], data[["3' end strand"]], sep=":")
+    rownames(data) <- paste( data[['Chr']], 
+                             paste(data[['Region start']], data[['Region end']], sep = "-"), 
+                             data[["3' end strand"]], sep=":")
   }
   
   # check for normalised counts
