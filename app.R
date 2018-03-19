@@ -530,8 +530,11 @@ server <- function(input, output, session) {
           ))
       }
       if (input$transform == 4) {
+        # plot <- plot +
+        #   scale_fill_distiller(type= 'div', palette = "RdBu")
         plot <- plot +
-          scale_fill_distiller(type= 'div', palette = "RdBu")
+          scale_fill_gradient2(low = '#2166ac', mid = '#f7f7f7', high = '#b2182b',
+                               midpoint = 0)
       }
       return(plot)
     }
