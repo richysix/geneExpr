@@ -78,7 +78,8 @@ load_data <- function( sampleFile, countFile, dataType, session ){
   # make a Summarized Experiment object so that metadata is included
   se <- SummarizedExperiment(
     assays = list(norm_counts = as.matrix(countData)),
-    rowData = DataFrame(data[, !grepl('count', names(data))]),
+    rowData = DataFrame(data[, !grepl('count', names(data))],
+                        row.names = rownames(countData)),
     colData = samples
   )
   return(se)
