@@ -697,6 +697,9 @@ server <- function(input, output, session) {
       paste('geneExpr', Sys.Date(), 'genes', 'tsv', sep = '.')
     },
     content = function(file) {
+      # data <- data.frame(
+      #   clusteredCounts()
+      # )
       write.table(
         rownames(clusteredCounts()),
         file,
