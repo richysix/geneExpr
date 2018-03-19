@@ -43,8 +43,12 @@ load_data <- function( sampleFile, countFile, dataType, session ){
   names(data)[names(data) == 'Description']      <- 'Gene.description'
   
   # convert gene id and gene name to character
-  data[['Gene.ID']] <- as.character(data[['Gene.ID']])
-  data[['Gene.name']] <- as.character(data[['Gene.name']])
+  if (any(grepl('Gene.ID', names(data)))) {
+    data[['Gene.ID']] <- as.character(data[['Gene.ID']])
+  }
+  if (any(grepl('Gene.name', names(data)))) {
+    data[['Gene.name']] <- as.character(data[['Gene.name']])
+  }
 #  data[['Gene.description']] <- as.character(data[['Gene.description']])
   
   if( dataType == 'rnaseq' ){
