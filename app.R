@@ -108,7 +108,11 @@ ui <- fluidPage(useShinyjs(),
                              )
                            )),
                   tabPanel("Counts",
-                           DT::dataTableOutput("table")),
+                           DT::dataTableOutput("counts"),
+                           downloadButton('downloadData', 'Download counts (tsv)')),
+                  tabPanel("Transformed Counts",
+                           DT::dataTableOutput("counts_transformed"),
+                           downloadButton('downloadTransformedData', 'Download transformed counts (tsv)')),
                   tabPanel("Help", includeMarkdown("README.md"))
                 ))
 
@@ -706,6 +710,7 @@ server <- function(input, output, session) {
     },
     contentType = 'text/tsv'
   )
+
   # for downloading a gene list
   output$downloadGenes <- downloadHandler(
     filename = function() {
@@ -727,9 +732,35 @@ server <- function(input, output, session) {
     contentType = 'text/tsv'
   )
   
+  # for downloading the transformed counts as a file
+  output$downloadTransformedData <- downloadHandler(
+    filename = function() {
+      paste('geneExpr', Sys.Date(), 'transformed.tsv', sep = '.')
+    },
+    content = function(file) {
+      write.table(
+        transformedCounts(),
+        file,
+        quote = FALSE,
+        col.names = NA,
+        sep = "\t"
+      )
+    },
+    contentType = 'text/tsv'
+  )
+  
   # render the counts matrix as a table
-  output$table <- DT::renderDataTable({
+  output$counts <- DT::renderDataTable({
     data <- clusteredCounts()
+    if (is.null(data)) {
+      return(NULL)
+    }
+    DT::datatable(data)
+  })
+  
+  # render the transformed counts matrix as a table
+  output$counts_transformed <- DT::renderDataTable({
+    data <- transformedCounts()
     if (is.null(data)) {
       return(NULL)
     }
