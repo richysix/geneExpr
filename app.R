@@ -88,7 +88,7 @@ ui <- fluidPage(useShinyjs(),
                                ),
                                downloadButton('downloadPlot', 'Download plot'),
                                h5('Count File'),
-                               downloadButton('downloadData', 'Download counts (tsv)'),
+                               downloadButton('download_count_file', 'Download counts (tsv)'),
                                h5('Gene List'),
                                downloadButton('downloadGenes', 'Download genes (tsv)'),
                                hr(),
@@ -108,11 +108,15 @@ ui <- fluidPage(useShinyjs(),
                              )
                            )),
                   tabPanel("Counts",
-                           DT::dataTableOutput("counts"),
-                           downloadButton('downloadData', 'Download counts (tsv)')),
+                           DT::dataTableOutput("table"),
+                           h5('Count File'),
+                           downloadButton('downloadData', 'Download counts (tsv)')
+                  ),
                   tabPanel("Transformed Counts",
-                           DT::dataTableOutput("counts_transformed"),
-                           downloadButton('downloadTransformedData', 'Download transformed counts (tsv)')),
+                           DT::dataTableOutput("transformed_counts"),
+                           h5('Transformed Counts File'),
+                           downloadButton('download_trans', 'Download Transformed counts (tsv)')
+                  ),
                   tabPanel("Help", includeMarkdown("README.md"))
                 ))
 
@@ -695,6 +699,23 @@ server <- function(input, output, session) {
   )
   
   # for downloading the counts file
+  output$download_count_file <- downloadHandler(
+    filename = function() {
+      paste('geneExpr', Sys.Date(), 'tsv', sep = '.')
+    },
+    content = function(file) {
+      write.table(
+        clusteredCounts(),
+        file,
+        quote = FALSE,
+        col.names = NA,
+        sep = "\t"
+      )
+    },
+    contentType = 'text/tsv'
+  )
+  
+  # for downloading the counts file
   output$downloadData <- downloadHandler(
     filename = function() {
       paste('geneExpr', Sys.Date(), 'tsv', sep = '.')
@@ -732,8 +753,8 @@ server <- function(input, output, session) {
     contentType = 'text/tsv'
   )
   
-  # for downloading the transformed counts as a file
-  output$downloadTransformedData <- downloadHandler(
+  # for downloading a file of the transformed counts
+  output$download_trans <- downloadHandler(
     filename = function() {
       paste('geneExpr', Sys.Date(), 'transformed.tsv', sep = '.')
     },
@@ -759,7 +780,7 @@ server <- function(input, output, session) {
   })
   
   # render the transformed counts matrix as a table
-  output$counts_transformed <- DT::renderDataTable({
+  output$transformed_counts <- DT::renderDataTable({
     data <- transformedCounts()
     if (is.null(data)) {
       return(NULL)
