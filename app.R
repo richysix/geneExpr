@@ -49,6 +49,13 @@ ui <- fluidPage(useShinyjs(),
                                  selected = 1
                                ),
                                hr(),
+                               h4('Fill Limits'),
+                               numericInput('min_fill', 'Min Fill:', NA, min = NA, max = NA, step = NA,
+                                            width = NULL),
+                               numericInput('max_fill', 'Max Fill:', NA, min = NA, max = NA, step = NA,
+                                            width = NULL),
+                               actionButton('reset_limits', 'Reset', icon = NULL, width = NULL),
+                               hr(),
                                checkboxGroupInput(
                                  "clusterCheckGroup",
                                  label = h4("Clustering"),
@@ -483,6 +490,11 @@ server <- function(input, output, session) {
     }
   })
   
+  observeEvent(input$reset_limits, {
+    updateNumericInput(session, 'min_fill', value = NA)
+    updateNumericInput(session, 'max_fill', value = NA)
+  })
+  
   # create plot object
   heatmapObj <- reactive({
     counts <- transformedCounts()
@@ -532,9 +544,12 @@ server <- function(input, output, session) {
       if (input$transform == 4) {
         # plot <- plot +
         #   scale_fill_distiller(type= 'div', palette = "RdBu")
+        print(input$min_fill)
+        print(input$max_fill)
         plot <- plot +
           scale_fill_gradient2(low = '#2166ac', mid = '#f7f7f7', high = '#b2182b',
-                               midpoint = 0)
+                               midpoint = 0,
+                               limits = c(input$min_fill, input$max_fill))
       }
       return(plot)
     }
