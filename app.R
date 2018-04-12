@@ -7,7 +7,8 @@ for (package in c('shiny',
                   'rnaseqVis',
                   'rprojroot',
                   'DT',
-                  'genefilter')) {
+                  'genefilter',
+                  'svglite')) {
   library(package, character.only = TRUE)
 }
 source('R/functions.R')
@@ -83,12 +84,19 @@ ui <- fluidPage(useShinyjs(),
                                ),
                                hr(),
                                h4('Downloads'),
+                               h5("Plot File"),
                                radioButtons(
                                  "plotFormat",
-                                 label = h5("Plot File"),
-                                 choices = list("pdf" = 'pdf', "png" = 'png'),
+                                 label = h6('File format'),
+                                 choices = list("pdf" = 'pdf', "png" = 'png',
+                                                'eps' = 'eps', 'svg' = 'svg'),
                                  selected = 'pdf'
                                ),
+                               h6('Plot dimensions'),
+                               numericInput('plot_width', 'Width (in):', 8, min = NA, max = NA, step = NA,
+                                            width = NULL),
+                               numericInput('plot_height', 'Height (in):', 10, min = NA, max = NA, step = NA,
+                                            width = NULL),
                                downloadButton('downloadPlot', 'Download plot'),
                                h5('Count File'),
                                downloadButton('download_count_file', 'Download counts (tsv)'),
@@ -695,16 +703,22 @@ server <- function(input, output, session) {
     content = function(file) {
       heatmapPlot <- heatmapObj()
       # theme( axis.text = element_text( size = rel(0.5) ) )
+      plot_width <- input$plot_width
+      plot_height <- input$plot_height
       if (input$plotFormat == "pdf") {
-        pdf(file,
-            paper = "special",
-            height = 16.5,
-            width = 11.7) # open the pdf device
+        pdf(file, paper = "special",
+            width = plot_width, height = plot_height) # open the pdf device
       } else if (input$plotFormat == "png") {
-        png(file,
-            height = 960,
-            width = 480,
-            res = 100) # open the png device
+        res <- 100
+        plot_width <- plot_width * res
+        plot_height <- plot_height * res
+        png(file, res = res,
+            width = plot_width, height = plot_height) # open the png device
+      } else if (input$plotFormat == "eps") {
+        postscript(file, paper = 'special', horizontal = FALSE,
+                   width = plot_width, height = plot_height) # open the eps device
+      } else if (input$plotFormat == "svg") {
+        svglite(file, width = plot_width, height = plot_height ) # open the svg device
       }
       print(heatmapPlot)
       dev.off()  # close device
