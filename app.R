@@ -37,6 +37,9 @@ ui <- fluidPage(useShinyjs(),
                                fileInput('geneIdsFile', 'Subset by Gene Id'),
                                actionButton("subsetReset", "Reset"),
                                hr(),
+                               h4('Axis labels'),
+                               checkboxInput('x_axis_labels', 'X-axis labels', value = TRUE, width = NULL),
+                               checkboxInput('y_axis_labels', 'Y-axis labels', value = TRUE, width = NULL),
                                radioButtons(
                                  "transform",
                                  label = h4("Transform Counts"),
@@ -511,43 +514,53 @@ server <- function(input, output, session) {
       return(NULL)
     } else {
       plot <- ggplotExprHeatmap(counts)
+      
+      # add axis labels
+      add_axis_labels <- function(plot, xlabels = NULL, ylabels = NULL) {
+        if (!is.null(xlabels)) {
+          if (!is.null(ylabels)) {
+            plot <- plot +
+              scale_y_discrete(labels = ylabels) +
+              theme(
+                axis.text.x = element_text(colour = "black", angle = 90,
+                  vjust = 0.5, hjust = 1, debug = FALSE),
+                axis.text.y = element_text(colour = "black", angle = 0, debug = FALSE)
+              )
+          } else {
+            plot <- plot +
+              theme(
+                axis.text.x = element_text(colour = "black", angle = 90,
+                                           vjust = 0.5, hjust = 1, debug = FALSE)
+              )
+          }
+        } else if (!is.null(ylabels)) {
+          plot <- plot +
+            scale_y_discrete(labels = ylabels) +
+            theme(
+              axis.text.y = element_text(colour = "black", angle = 0, debug = FALSE)
+            )
+        }
+        return(plot)
+      }
       if (nrow(counts) <= 80) {
         genes <- ids2Names$genes[rownames(counts)]
         if (ncol(counts) <= 48) {
-          plot <- plot +
-            scale_y_discrete(labels = genes) +
-            theme(
-              axis.text.x = element_text(
-                colour = "black",
-                angle = 90,
-                vjust = 0.5,
-                hjust = 1,
-                debug = FALSE
-              ),
-              axis.text.y = element_text(
-                colour = "black",
-                angle = 0,
-                debug = FALSE
-              )
-            )
+          if (input$x_axis_labels && input$y_axis_labels) {
+            plot <- add_axis_labels(plot, xlabels = TRUE, ylabels = genes)
+          } else if (input$x_axis_labels) {
+            plot <- add_axis_labels(plot, xlabels = TRUE, ylabels = NULL)
+          } else if (input$y_axis_labels) {
+            plot <- add_axis_labels(plot, xlabels = NULL, ylabels = genes)
+          }
         } else{
-          plot <- plot +
-            scale_y_discrete(labels = genes) +
-            theme(axis.text.y = element_text(
-              colour = "black",
-              angle = 0,
-              debug = FALSE
-            ))
+          if (input$y_axis_labels) {
+            plot <- add_axis_labels(plot, xlabels = NULL, ylabels = genes)
+          }
         }
       } else if (ncol(counts) <= 48) {
-        plot <- plot +
-          theme(axis.text.x = element_text(
-            colour = "black",
-            angle = 90,
-            vjust = 0.5,
-            hjust = 1,
-            debug = FALSE
-          ))
+        if (input$x_axis_labels) {
+          plot <- add_axis_labels(plot, xlabels = TRUE, ylabels = NULL)
+        }
       }
       if (input$transform == 4) {
         # plot <- plot +
