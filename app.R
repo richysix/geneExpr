@@ -19,8 +19,11 @@ debug <- TRUE
 rootPath <- find_root(is_rstudio_project)
 
 # Define UI for application
-ui <- fluidPage(useShinyjs(),
-                # Include shinyjs
+ui <- fluidPage(useShinyjs(), # Include shinyjs
+                theme = "flatly.bootstrap.min.css",
+                tags$head(
+                  tags$link(rel = "stylesheet", type = "text/css", href = "geneexpr.css")
+                ),
                 navbarPage(
                   "geneExpr",
                   tabPanel("Heatmap",
@@ -38,35 +41,6 @@ ui <- fluidPage(useShinyjs(),
                                fileInput('geneIdsFile', 'Subset by Gene Id'),
                                actionButton("subsetReset", "Reset"),
                                hr(),
-                               h4('Axis labels'),
-                               checkboxInput('x_axis_labels', 'X-axis labels', value = TRUE, width = NULL),
-                               checkboxInput('y_axis_labels', 'Y-axis labels', value = TRUE, width = NULL),
-                               radioButtons(
-                                 "transform",
-                                 label = h4("Transform Counts"),
-                                 choices = list(
-                                   "Raw" = 1,
-                                   "Max Scaled" = 2,
-                                   "log 10" = 3,
-                                   "Mean Centred and Scaled" = 4
-                                 ),
-                                 selected = 1
-                               ),
-                               hr(),
-                               h4('Fill Limits'),
-                               numericInput('min_fill', 'Min Fill:', NA, min = NA, max = NA, step = NA,
-                                            width = NULL),
-                               numericInput('max_fill', 'Max Fill:', NA, min = NA, max = NA, step = NA,
-                                            width = NULL),
-                               actionButton('reset_limits', 'Reset', icon = NULL, width = NULL),
-                               hr(),
-                               checkboxGroupInput(
-                                 "clusterCheckGroup",
-                                 label = h4("Clustering"),
-                                 choices = list("By Genes" = 1, "By Samples" = 2),
-                                 selected = c()
-                               ),
-                               hr(),
                                h4('Filter Genes'),
                                sliderInput(
                                  "minMeanCount",
@@ -82,6 +56,35 @@ ui <- fluidPage(useShinyjs(),
                                  max = 1000000,
                                  value = 1000000
                                ),
+                               hr(),
+                               radioButtons(
+                                 "transform",
+                                 label = h4("Transform Counts"),
+                                 choices = list(
+                                   "Raw" = 1,
+                                   "Max Scaled" = 2,
+                                   "log 10" = 3,
+                                   "Mean Centred and Scaled" = 4
+                                 ),
+                                 selected = 1
+                               ),
+                               hr(),
+                               checkboxGroupInput(
+                                 "clusterCheckGroup",
+                                 label = h4("Clustering"),
+                                 choices = list("By Genes" = 1, "By Samples" = 2),
+                                 selected = c()
+                               ),
+                               hr(),
+                               h4('Axis labels'),
+                               checkboxInput('x_axis_labels', 'X-axis labels', value = TRUE, width = NULL),
+                               checkboxInput('y_axis_labels', 'Y-axis labels', value = TRUE, width = NULL),
+                               h4('Fill Limits'),
+                               numericInput('min_fill', 'Min Fill:', NA, min = NA, max = NA, step = NA,
+                                            width = NULL),
+                               numericInput('max_fill', 'Max Fill:', NA, min = NA, max = NA, step = NA,
+                                            width = NULL),
+                               actionButton('reset_limits', 'Reset', icon = NULL, width = NULL),
                                hr(),
                                h4('Downloads'),
                                h5("Plot File"),
@@ -99,9 +102,9 @@ ui <- fluidPage(useShinyjs(),
                                             width = NULL),
                                downloadButton('downloadPlot', 'Download plot'),
                                h5('Count File'),
-                               downloadButton('download_count_file', 'Download counts (tsv)'),
+                               downloadButton('download_count_file', 'Download Counts (tsv)'),
                                h5('Gene List'),
-                               downloadButton('downloadGenes', 'Download genes (tsv)'),
+                               downloadButton('downloadGenes', 'Download Genes (txt)'),
                                hr(),
                                fileInput('dataFile', 'Load .RData File'),
                                width = 3
@@ -119,9 +122,9 @@ ui <- fluidPage(useShinyjs(),
                              )
                            )),
                   tabPanel("Counts",
-                           DT::dataTableOutput("table"),
+                           DT::dataTableOutput("counts"),
                            h5('Count File'),
-                           downloadButton('downloadData', 'Download counts (tsv)')
+                           downloadButton('downloadData', 'Download Counts (tsv)')
                   ),
                   tabPanel("Transformed Counts",
                            DT::dataTableOutput("transformed_counts"),
@@ -762,7 +765,7 @@ server <- function(input, output, session) {
   # for downloading a gene list
   output$downloadGenes <- downloadHandler(
     filename = function() {
-      paste('geneExpr', Sys.Date(), 'genes', 'tsv', sep = '.')
+      paste('geneExpr', Sys.Date(), 'genes', 'txt', sep = '.')
     },
     content = function(file) {
       # data <- data.frame(

@@ -1,0 +1,10 @@
+.table-bordered-centered > thead > tr > th,
+.table-bordered-centered > tbody > tr > th,
+.table-bordered-centered > tfoot > tr > th,
+.table-bordered-centered > thead > tr > td,
+.table-bordered-centered > tbody > tr > td,
+.table-bordered-centered > tfoot > tr > td {
+	border: 1px solid #3c3c3c;
+	text-align: center;
+	padding: 10px;
+}
