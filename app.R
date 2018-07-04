@@ -580,7 +580,7 @@ server <- function(input, output, session) {
         print(input$max_fill)
         plot <- plot +
           scale_fill_gradient2(low = '#2166ac', mid = '#f7f7f7', high = '#b2182b',
-                               midpoint = 0,
+                               midpoint = 0, na.value = 'white',
                                limits = c(input$min_fill, input$max_fill))
       }
       return(plot)
