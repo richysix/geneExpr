@@ -8,11 +8,12 @@ The app is designed to display gene expression data produced by RNA-seq.
 
 ### Loading data
 
-Data can be loaded using the buttons at the top of the side bar control panel. Users need to supply a count file along with a sample file.
+Data can be loaded using the buttons at the top of the side bar control panel. Users need to supply a sample file along with a count file.
 
 #### Count File
 The count file should be a tab-separated file containing genes in rows and samples in columns.
-If normalised count columns are provided these will be used directly. Otherwise count columns will be loaded into DESeq2 and normalised for library size. The normalised counts are then displayed.
+The 'Gene ID' and 'Gene Name' columns are required. If you are using IDs that don't obviously correspond to a gene name, simply duplicate the IDs column. The other required columns are the counts for each different sample either as already normalised counts or raw counts.
+If normalised count columns are provided these will be used directly (The column names must match the sample IDs with ' normalised count' appended). Otherwise count columns will be loaded into DESeq2 and normalised for library size (In this case the column names must match the sample IDs with ' count' appended). The normalised counts are then displayed. If both normalised and unnormalised counts are provided, the normalised counts will be used.
 
 e.g.
 <table class="table-bordered-centered">
@@ -56,7 +57,7 @@ e.g.
 
 #### Sample File
 
-The sample file is a tab-separated file containg at least two columns. The required columns are the sample names that match the (normalised) count column names in the count file. This must be the first column. The other required column should be labelled "condition" and details how the samples are divided into groups (e.g. Control and Treated). If the file contains a column labelled "sampleName" these names will be displayed on the heatmap instead of the name from the first column. The count columns will be reordered based on the sample file.
+The sample file is a tab-separated file containg at least two columns. The required columns are the sample IDs that match the (normalised) count column names in the count file. This must be the first column. The other required column should be labelled "condition" and details how the samples are divided into groups (e.g. Control and Treated). If the file contains a column labelled "sampleName" these names will be displayed on the heatmap instead of the IDs from the first column. The count columns will be reordered based on the sample file.
 
 e.g.
 <table class="table-bordered-centered">
@@ -119,7 +120,7 @@ Both the rows (genes) and columns (samples) of the heatmap can be clustered. Cur
 
 #### Axis labels
 
-Labels are added to the x axis if there are less than 48 columns and to the y axis if there are less than 80 rows. These can be removed using the Axis label checkboxes.
+Labels are added to the x axis if there are less than 48 columns and to the y axis if there are less than 80 rows. These can be removed using the Axis label checkboxes. X-axis labels will be the sample IDs from the first column of the samples file or from the "sampleNames" column if it exists. Y-axis labels will be taken from the "Gene Name" column of the counts file.
 
 #### Fill Limits
 
