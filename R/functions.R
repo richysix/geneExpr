@@ -34,6 +34,7 @@ load_data <- function( sampleFile, countFile, dataType, session ){
   names(data)[names(data) == 'start']   <- 'Start'
   names(data)[names(data) == 'end']     <- 'End'
   names(data)[names(data) == 'Gene ID']      <- 'Gene.ID'
+  names(data)[names(data) == 'Gene']      <- 'Gene.ID'
   names(data)[names(data) == 'ID']      <- 'Gene.ID'
   names(data)[ grepl("e[0-9][0-9] Ensembl Gene ID", names(data), perl=TRUE ) ]    <- 'Gene.ID'
   names(data)[names(data) == 'Name']      <- 'Gene.name'

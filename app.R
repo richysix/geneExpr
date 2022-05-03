@@ -2,6 +2,7 @@
 for (package in c('shiny',
                   'shinyjs',
                   'shinyBS',
+                  'tidyverse',
                   'ggplot2',
                   'DESeq2',
                   'rnaseqVis',
@@ -14,7 +15,7 @@ for (package in c('shiny',
 source('R/functions.R')
 
 # globals
-testing <- FALSE
+testing <- TRUE
 debug <- TRUE
 rootPath <- find_root(is_rstudio_project)
 
@@ -131,6 +132,35 @@ ui <- fluidPage(useShinyjs(), # Include shinyjs
                            h5('Transformed Counts File'),
                            downloadButton('download_trans', 'Download Transformed counts (tsv)')
                   ),
+                  tabPanel("Count Plot", 
+                           bsAlert("count_plot_alert"),
+                           sidebarLayout(
+                             position = 'right',
+                             sidebarPanel(
+                               width = 3,
+                               textInput('gene_id', label = "Gene ID"),
+                               h4('Download'),
+                               radioButtons(
+                                 "plot_format_counts",
+                                 label = 'Plot Format',
+                                 choices = list('pdf' = 'pdf', 
+                                                'eps' = 'eps',
+                                                'svg' = 'svg',
+                                                'png' = 'png'),
+                                 selected = 'pdf'
+                               ),
+                               downloadButton('download_current_count_plot', 'Download Current Plot')
+                             ),
+                             mainPanel(
+                               width = 9,
+                               tableOutput('rowdata'),
+                               tableOutput('coldata'),
+                               tableOutput('countdata'),
+                               tableOutput('count_plot_data')
+#                               plotOutput('count_plot_selected_gene')
+                             )
+                           )
+                  ),
                   tabPanel("Help", includeMarkdown("README.md"))
                 ))
 
@@ -148,7 +178,7 @@ server <- function(input, output, session) {
   clustered <- 
     reactiveValues() # this will contain genes, samples, all named character vectors
   
-  normalisedCounts <- reactive({
+  exptData <- reactive({
     if (debug) {
       print('Function: normalisedCounts')
     }
@@ -213,7 +243,16 @@ server <- function(input, output, session) {
     selected$samples <- samples
     ids2Names$genes <- genes
     ids2Names$samples <- samples
-    return(assays(exptData)$norm_counts)
+    return(exptData)
+  })
+    
+  normalisedCounts <- reactive({
+    expt_data <- exptData()
+    if (is.null(expt_data)) {
+      return(NULL)
+    } else {
+      return(assays(expt_data)$norm_counts)
+    }
   })
   
   subsetGeneList <- observe({
@@ -524,7 +563,7 @@ server <- function(input, output, session) {
     if (is.null(counts)) {
       return(NULL)
     } else {
-      plot <- ggplotExprHeatmap(counts)
+      plot <- rnaseqVis::expr_heatmap(counts)
       
       # add axis labels
       add_axis_labels <- function(plot, xlabels = NULL, ylabels = NULL) {
@@ -817,6 +856,58 @@ server <- function(input, output, session) {
     }
     DT::datatable(data)
   })
+  
+  # render count plot
+  output$rowdata <- renderTable({
+    expt_data <- exptData()
+    return(head(rowData(expt_data)))
+  }, rownames = TRUE)
+  output$coldata <- renderTable({
+    expt_data <- exptData()
+    return(head(colData(expt_data)))
+  }, rownames = TRUE)
+  output$countdata <- renderTable({
+    expt_data <- exptData()
+    return(assays(expt_data)$norm_counts[1:5,1:5])
+  }, rownames = TRUE)
+  
+  # output$count_plot_selected_gene <- renderPlot({
+  output$count_plot_data <- renderTable({
+    expt_data <- exptData()
+    if (is.null(expt_data)) {
+      return(NULL)
+    }
+    # subset to selected gene
+    gene_id <- input$gene_id
+    if (gene_id == "") {
+      return(NULL)
+    }
+    if (!any(rowData(expt_data)$Gene.ID == gene_id)) {
+      subsetErrorMsg <- paste("Couldn't find the gene id,",
+                              gene_id, "in the counts table.")
+      createAlert(
+        session,
+        "count_plot_alert",
+        "subsetErrorAlert",
+        title = "Subsetting error",
+        content = subsetErrorMsg,
+        append = FALSE,
+        style = 'warning'
+      )
+      return(NULL)
+    } else {
+      samples <- colData(expt_data) %>% 
+        as_tibble(rownames = "sample")
+      counts_for_plot <- assays(expt_data)$norm_counts %>% 
+        as_tibble(rownames = "Gene") %>% 
+        filter(., Gene == gene_id) %>% 
+        tidyr::pivot_longer(., cols = -Gene, names_to = "sample", values_to = "Normalised Counts") %>% 
+        inner_join(samples, .)
+      return(head(counts_for_plot))
+    }
+    
+  })
+  
 }
 
 # Run the application
