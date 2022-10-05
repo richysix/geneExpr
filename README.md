@@ -1,6 +1,7 @@
 # geneExpr
 
 A shiny app for visualising gene expression data.
+[https://richysix.shinyapps.io/geneexpr/](https://richysix.shinyapps.io/geneexpr/)
 
 ## Instructions
 
